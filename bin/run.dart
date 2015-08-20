@@ -36,7 +36,8 @@ launchServer(int port, SimpleNode node) async {
       var p = new Path(n.path);
       var map = {
         "?name": p.name,
-        "?path": path
+        "?path": path.split("/").skip(2).join("/"),
+        "?fullPath": path
       };
 
       map.addAll(n.configs);
@@ -47,7 +48,8 @@ launchServer(int port, SimpleNode node) async {
         var x = new Path(child.path);
         map[key] = {
           "?name": x.name,
-          "?path": x.path
+          "?fullPath": x.path,
+          "?path": "/" + x.path.split("/").skip(2).join("/")
         }..addAll(child.getSimpleMap());
       }
 
