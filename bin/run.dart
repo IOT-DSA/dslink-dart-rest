@@ -109,9 +109,16 @@ launchServer(int port, SimpleNode node) async {
         return;
       }
 
-      var map = getNodeMap(node);
-      map.addAll(json);
-      node.load(map);
+      Map map;
+      if (json.keys.length == 1 && json.keys.contains("?value")) {
+        node.updateValue(json["?value"]);
+        map = getNodeMap(node);
+      } else {
+        map = getNodeMap(node);
+        map.addAll(json);
+        map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
+        node.load(map);
+      }
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
@@ -170,11 +177,28 @@ main(List<String> args) async {
           "type": "int"
         }
       ],
+      r"$result": "values",
+      r"$columns": [
+        {
+          "name": "message",
+          "type": "string"
+        }
+      ],
       r"$is": "addServer"
     }
   }, profiles: {
     "addServer": (String path) => new SimpleActionNode(path, (Map<String, dynamic> params) async {
       int port = params["port"] is String  ? int.parse(params["port"]) : params["port"];
+
+      try {
+        var server = await ServerSocket.bind(InternetAddress.LOOPBACK_IP_V4, port);
+        await server.close();
+      } catch (e) {
+        return {
+          "message": "Failed to bind to port: ${e}"
+        };
+      }
+
       link.addNode("/${params["name"]}", {
         r"$is": "server",
         r"$server_port": port,
@@ -184,6 +208,9 @@ main(List<String> args) async {
         }
       });
       link.save();
+      return {
+        "message": "Success!"
+      };
     }),
     "server": (String path) {
       return new ServerNode(path);
