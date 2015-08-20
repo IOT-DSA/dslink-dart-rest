@@ -45,3 +45,42 @@ A DSLink for serving and manipulating DSA data using a REST API.
   "?value": 30
 }
 ```
+
+## Overwrite Node
+
+**Method**: POST<br/>
+**Example Request**:
+```json
+{
+  "$type": "number",
+  "@unit": "%",
+  "?value": 30
+}
+```
+
+**Example Response**:
+```json
+{
+  "?name": "percentage",
+  "?path": "/data/percentage",
+  "$is": "node",
+  "$type": "number",
+  "@unit": "%",
+  "?value": 30
+}
+```
+
+## Delete Node
+
+**Method**: DELETE<br/>
+**Example Response**:
+```json
+{
+  "?name": "percentage",
+  "?path": "/data/percentage",
+  "$is": "node",
+  "$type": "number",
+  "@unit": "%",
+  "?value": 30
+}
+```
