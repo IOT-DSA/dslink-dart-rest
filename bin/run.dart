@@ -33,6 +33,12 @@ launchServer(int port, SimpleNode node) async {
         };
       }
 
+      if (n is! RestNode && n is! ServerNode) {
+        return {
+          "error": "Not a REST node"
+        };
+      }
+
       var p = new Path(n.path);
       var map = {
         "?name": p.name,
@@ -45,6 +51,11 @@ launchServer(int port, SimpleNode node) async {
 
       for (var key in n.children.keys) {
         var child = n.children[key];
+
+        if (child is! RestNode) {
+          continue;
+        }
+
         var x = new Path(child.path);
         map[key] = {
           "?name": x.name,
@@ -106,6 +117,7 @@ launchServer(int port, SimpleNode node) async {
         } else {
           map = getNodeMap(node);
           map.addAll(json);
+          map[r"$is"] = "rest";
           map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
           node.load(map);
         }
@@ -116,6 +128,7 @@ launchServer(int port, SimpleNode node) async {
       }
 
       var map = getNodeMap(node);
+      map[r"$is"] = "rest";
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
@@ -142,6 +155,7 @@ launchServer(int port, SimpleNode node) async {
       } else {
         map = {};
         map.addAll(json);
+        map[r"$is"] = "rest";
         node.load(map);
       }
       response.headers.contentType = ContentType.JSON;
@@ -251,11 +265,56 @@ main(List<String> args) async {
     "server": (String path) {
       return new ServerNode(path);
     },
+    "rest": (String path) {
+      return new RestNode(path);
+    },
+    "create": (String path) {
+      return new SimpleActionNode(path, (Map<String, dynamic> params) {
+        var name = params["name"];
+
+        var parent = new Path(path).parent;
+        link.addNode("${parent.path}/${name}", {
+          r"$is": "rest"
+        });
+        link.save();
+      });
+    },
     "remove": (String path) => new DeleteActionNode.forParent(path, link.provider)
   }, autoInitialize: false);
 
   link.init();
   link.connect();
+}
+
+class RestNode extends SimpleNode {
+  RestNode(String path) : super(path);
+
+  @override
+  onCreated() {
+    link.addNode("${path}/Create_Node", {
+      r"$name": "Create Node",
+      r"$is": "create",
+      r"$invokable": "write",
+      r"$result": "values",
+      r"$params": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    });
+
+    link.addNode("${path}/Remove_Node", {
+      r"$name": "Remove Node",
+      r"$is": "remove",
+      r"$invokable": "write"
+    });
+  }
+
+  @override
+  onRemoving() {
+    link.save();
+  }
 }
 
 class ServerNode extends SimpleNode {
@@ -267,6 +326,19 @@ class ServerNode extends SimpleNode {
   onCreated() async {
     var port = configs[r"$server_port"];
     server = await launchServer(port, this);
+
+    link.addNode("${path}/Create_Node", {
+      r"$name": "Create Node",
+      r"$is": "create",
+      r"$invokable": "write",
+      r"$result": "values",
+      r"$params": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    });
   }
 
   @override
