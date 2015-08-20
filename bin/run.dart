@@ -79,6 +79,22 @@ launchServer(int port, SimpleNode node) async {
       return;
     } else if (method == "PUT") {
       var json = await readJSONData(request);
+      var mp = p.parent;
+      var pathsToCreate = [];
+      while (!mp.isRoot) {
+        if (link.getNode(mp.path) == null) {
+          pathsToCreate.add(mp.path);
+        }
+        mp = mp.parent;
+      }
+
+      if (pathsToCreate.isNotEmpty) {
+        pathsToCreate.sort();
+        for (var pr in pathsToCreate) {
+          link.addNode(pr, {});
+        }
+      }
+
       var node = link.addNode(path, json);
       if (link.provider.getNode(path) != null) {
         Map map;
