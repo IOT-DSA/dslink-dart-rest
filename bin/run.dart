@@ -150,7 +150,7 @@ launchServer(bool local, int port, SimpleNode node) async {
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON(map));
         response.close();
-        link.save();
+        changed = true;
         return;
       }
 
@@ -160,7 +160,7 @@ launchServer(bool local, int port, SimpleNode node) async {
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
-      link.save();
+      changed = true;
       return;
     } else if (method == "POST" || method == "PATCH") {
       SimpleNode node = link.getNode(path);
@@ -172,7 +172,7 @@ launchServer(bool local, int port, SimpleNode node) async {
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON(map));
         response.close();
-        link.save();
+        changed = true;
         return;
       }
 
@@ -189,7 +189,7 @@ launchServer(bool local, int port, SimpleNode node) async {
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
-      link.save();
+      changed = true;
       return;
     } else if (method == "DELETE") {
       SimpleNode node = link.getNode(path);
@@ -209,7 +209,7 @@ launchServer(bool local, int port, SimpleNode node) async {
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
-      link.save();
+      changed = true;
       return;
     }
 
@@ -267,7 +267,7 @@ main(List<String> args) async {
           r"$invokable": "write"
         }
       });
-      link.save();
+      changed = true;
       return {
         "message": "Success!"
       };
@@ -286,7 +286,7 @@ main(List<String> args) async {
         link.addNode("${parent.path}/${name}", {
           r"$is": "rest"
         });
-        link.save();
+        changed = true;
       });
     },
     "createMetric": (String path) {
@@ -306,7 +306,7 @@ main(List<String> args) async {
           node.configs[r"$editor"] = editor;
         }
 
-        link.save();
+        changed = true;
       });
     },
     "remove": (String path) => new DeleteActionNode.forParent(path, link.provider)
@@ -352,7 +352,17 @@ main(List<String> args) async {
   }
 
   link.connect();
+
+  timer = Scheduler.every(Interval.ONE_SECOND, () async {
+    if (changed) {
+      changed = false;
+      await link.saveAsync();
+    }
+  });
 }
+
+bool changed = false;
+Timer timer;
 
 class RestNode extends SimpleNode {
   RestNode(String path) : super(path);
@@ -399,12 +409,12 @@ class RestNode extends SimpleNode {
   @override
   updateValue(Object update, {bool force: false}) {
     super.updateValue(update, force: force);
-    link.save();
+    changed = true;
   }
 
   @override
   onRemoving() {
-    link.save();
+    changed = true;
   }
 }
 
