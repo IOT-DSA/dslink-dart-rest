@@ -13,15 +13,17 @@ JsonEncoder jsonEncoder = new JsonEncoder.withIndent("  ");
 
 String toJSON(input) => jsonEncoder.convert(input);
 
-launchServer(int port, SimpleNode node) async {
+launchServer(bool local, int port, SimpleNode node) async {
   List<HttpServer> servers = <HttpServer>[];
+  InternetAddress ipv4 = local ? InternetAddress.LOOPBACK_IP_V4 : InternetAddress.ANY_IP_V4;
+  InternetAddress ipv6 = local ? InternetAddress.LOOPBACK_IP_V6 : InternetAddress.ANY_IP_V6;
 
   try {
-    servers.add(await HttpServer.bind(InternetAddress.ANY_IP_V4, port));
+    servers.add(await HttpServer.bind(ipv4, port));
   } catch (e) {}
 
   try {
-    servers.add(await HttpServer.bind(InternetAddress.ANY_IP_V6, port));
+    servers.add(await HttpServer.bind(ipv6, port));
   } catch (e) {}
 
   HttpMultiServer server = new HttpMultiServer(servers);
@@ -252,6 +254,12 @@ main(List<String> args) async {
           "placeholder": "MyServer"
         },
         {
+          "name": "local",
+          "type": "bool",
+          "description": "Bind to Local Interface",
+          "default": false
+        },
+        {
           "name": "port",
           "type": "int",
           "default": 8020
@@ -269,6 +277,8 @@ main(List<String> args) async {
   }, profiles: {
     "addServer": (String path) => new SimpleActionNode(path, (Map<String, dynamic> params) async {
       int port = params["port"] is String  ? int.parse(params["port"]) : params["port"];
+      bool local = params["local"];
+      if (local == null) local = false;
 
       try {
         var server = await ServerSocket.bind(InternetAddress.ANY_IP_V4, port);
@@ -282,6 +292,7 @@ main(List<String> args) async {
       link.addNode("/${params["name"]}", {
         r"$is": "server",
         r"$server_port": port,
+        r"$server_local": local,
         "Remove": {
           r"$is": "remove",
           r"$invokable": "write"
@@ -438,7 +449,9 @@ class ServerNode extends SimpleNode {
   @override
   onCreated() async {
     var port = configs[r"$server_port"];
-    server = await launchServer(port, this);
+    var local = configs[r"$server_local"];
+    if (local == null) local = false;
+    server = await launchServer(local, port, this);
 
     link.addNode("${path}/Create_Node", {
       r"$name": "Create Node",
