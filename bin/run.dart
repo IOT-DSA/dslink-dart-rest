@@ -243,38 +243,7 @@ Future<Map> readJSONData(HttpRequest request) async {
 }
 
 main(List<String> args) async {
-  link = new LinkProvider(args, "REST-", defaultNodes: {
-    "Add_Server": {
-      r"$name": "Add Server",
-      r"$invokable": "write",
-      r"$params": [
-        {
-          "name": "name",
-          "type": "string",
-          "placeholder": "MyServer"
-        },
-        {
-          "name": "local",
-          "type": "bool",
-          "description": "Bind to Local Interface",
-          "default": false
-        },
-        {
-          "name": "port",
-          "type": "int",
-          "default": 8020
-        }
-      ],
-      r"$result": "values",
-      r"$columns": [
-        {
-          "name": "message",
-          "type": "string"
-        }
-      ],
-      r"$is": "addServer"
-    }
-  }, profiles: {
+  link = new LinkProvider(args, "REST-", profiles: {
     "addServer": (String path) => new SimpleActionNode(path, (Map<String, dynamic> params) async {
       int port = params["port"] is String  ? int.parse(params["port"]) : params["port"];
       bool local = params["local"];
@@ -343,7 +312,45 @@ main(List<String> args) async {
     "remove": (String path) => new DeleteActionNode.forParent(path, link.provider)
   }, autoInitialize: false);
 
+  var nodes = {
+    "Add_Server": {
+      r"$name": "Add Server",
+      r"$invokable": "write",
+      r"$params": [
+        {
+          "name": "name",
+          "type": "string",
+          "placeholder": "MyServer"
+        },
+        {
+          "name": "local",
+          "type": "bool",
+          "description": "Bind to Local Interface",
+          "default": false
+        },
+        {
+          "name": "port",
+          "type": "int",
+          "default": 8020
+        }
+      ],
+      r"$result": "values",
+      r"$columns": [
+        {
+          "name": "message",
+          "type": "string"
+        }
+      ],
+      r"$is": "addServer"
+    }
+  };
+
   link.init();
+
+  for (var k in nodes.keys) {
+    link.addNode("/${k}", nodes[k]);
+  }
+
   link.connect();
 }
 
