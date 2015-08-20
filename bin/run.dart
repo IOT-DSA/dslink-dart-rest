@@ -324,7 +324,7 @@ class RestNode extends SimpleNode {
       ]
     });
 
-    link.addNode("${path}/Create_Metric", CREATE_METRIC);
+    link.addNode("${path}/Create_Value", CREATE_VALUE);
 
     link.addNode("${path}/Remove_Node", {
       r"$name": "Remove Node",
@@ -339,8 +339,8 @@ class RestNode extends SimpleNode {
   }
 }
 
-final Map<String, dynamic> CREATE_METRIC = {
-  r"$name": "Create Metric",
+final Map<String, dynamic> CREATE_VALUE = {
+  r"$name": "Create Value",
   r"$is": "createMetric",
   r"$invokable": "write",
   r"$result": "values",
@@ -402,7 +402,7 @@ class ServerNode extends SimpleNode {
       ]
     });
 
-    link.addNode("${path}/Create_Metric", CREATE_METRIC);
+    link.addNode("${path}/Create_Value", CREATE_VALUE);
   }
 
   @override
