@@ -5,6 +5,8 @@ import "dart:io";
 import "package:dslink/dslink.dart";
 import "package:dslink/nodes.dart";
 
+import "package:http_multi_server/http_multi_server.dart";
+
 LinkProvider link;
 
 JsonEncoder jsonEncoder = new JsonEncoder.withIndent("  ");
@@ -12,16 +14,39 @@ JsonEncoder jsonEncoder = new JsonEncoder.withIndent("  ");
 String toJSON(input) => jsonEncoder.convert(input);
 
 launchServer(int port, SimpleNode node) async {
-  HttpServer server = await HttpServer.bind(InternetAddress.ANY_IP_V4, port);
+  List<HttpServer> servers = <HttpServer>[];
+
+  try {
+    servers.add(await HttpServer.bind(InternetAddress.ANY_IP_V4, port));
+  } catch (e) {}
+
+  try {
+    servers.add(await HttpServer.bind(InternetAddress.ANY_IP_V6, port));
+  } catch (e) {}
+
+  HttpMultiServer server = new HttpMultiServer(servers);
 
   handleRequest(HttpRequest request) async {
     HttpResponse response = request.response;
+
     Uri uri = request.uri;
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
     String path = "${node.path}${ourPath}";
     if (path.endsWith("/")) {
       path = path.substring(0, path.length - 1);
+    }
+
+    response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    if (method == "OPTIONS") {
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      response.headers.set("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE");
+      response.writeln();
+      response.close();
+      return;
     }
 
     Path p = new Path(path);
@@ -42,7 +67,7 @@ launchServer(int port, SimpleNode node) async {
       var p = new Path(n.path);
       var map = {
         "?name": p.name,
-        "?path": path.split("/").skip(2).join("/"),
+        "?path": "/" + path.split("/").skip(2).join("/"),
         "?fullPath": path
       };
 
@@ -77,6 +102,7 @@ launchServer(int port, SimpleNode node) async {
 
       if (link.provider.getNode(path) == null) {
         response.statusCode = HttpStatus.NOT_FOUND;
+        response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON({
           "error": "No Such Node"
         }));
@@ -170,6 +196,7 @@ launchServer(int port, SimpleNode node) async {
 
       if (node == null) {
         response.statusCode = HttpStatus.NOT_FOUND;
+        response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON({
           "error": "No Such Node"
         }));
@@ -185,6 +212,7 @@ launchServer(int port, SimpleNode node) async {
       return;
     }
 
+    response.headers.contentType = ContentType.JSON;
     response.statusCode = HttpStatus.BAD_REQUEST;
     response.writeln(toJSON({
       "error": "Bad Request"
@@ -221,11 +249,13 @@ main(List<String> args) async {
       r"$params": [
         {
           "name": "name",
-          "type": "string"
+          "type": "string",
+          "placeholder": "MyServer"
         },
         {
           "name": "port",
-          "type": "int"
+          "type": "int",
+          "default": 8020
         }
       ],
       r"$result": "values",
@@ -242,7 +272,7 @@ main(List<String> args) async {
       int port = params["port"] is String  ? int.parse(params["port"]) : params["port"];
 
       try {
-        var server = await ServerSocket.bind(InternetAddress.LOOPBACK_IP_V4, port);
+        var server = await ServerSocket.bind(InternetAddress.ANY_IP_V4, port);
         await server.close();
       } catch (e) {
         return {
