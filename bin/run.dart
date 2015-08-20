@@ -108,8 +108,8 @@ launchServer(int port, SimpleNode node) async {
         }
       }
 
-      var node = link.addNode(path, json);
       if (link.provider.getNode(path) != null) {
+        var node = link.provider.getNode(path);
         Map map;
         if (json.keys.length == 1 && json.keys.contains("?value")) {
           node.updateValue(json["?value"]);
@@ -127,6 +127,7 @@ launchServer(int port, SimpleNode node) async {
         return;
       }
 
+      var node = link.addNode(path, json);
       var map = getNodeMap(node);
       map[r"$is"] = "rest";
       response.headers.contentType = ContentType.JSON;
