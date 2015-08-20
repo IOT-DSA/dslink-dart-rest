@@ -152,7 +152,16 @@ launchServer(int port, SimpleNode node) async {
     response.close();
   }
 
-  server.listen(handleRequest);
+  server.listen((request) async {
+    try {
+      await handleRequest(request);
+    } catch (e) {
+      request.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      request.response.writeln("Internal Server Error:");
+      request.response.writeln(e);
+      request.response.close();
+    }
+  });
 
   return server;
 }
