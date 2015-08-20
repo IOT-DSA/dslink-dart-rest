@@ -150,6 +150,7 @@ launchServer(int port, SimpleNode node) async {
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON(map));
         response.close();
+        link.save();
         return;
       }
 
