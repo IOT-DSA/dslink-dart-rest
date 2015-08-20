@@ -87,14 +87,15 @@ launchServer(int port, SimpleNode node) async {
         return;
       }
 
-      var node = link.addNode(path, await readJSONData(request));
+      var json = await readJSONData(request);
+      var node = link.addNode(path, json);
       var map = getNodeMap(node);
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
       response.close();
       link.save();
       return;
-    } else if (method == "POST") {
+    } else if (method == "POST" || method == "PATCH") {
       SimpleNode node = link.getNode(path);
       var json = await readJSONData(request);
 
