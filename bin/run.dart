@@ -366,6 +366,27 @@ class RestNode extends SimpleNode {
   }
 
   @override
+  onSetValue(Object val) {
+    if (configs[r"$type"] == "map" && val is String) {
+      try {
+        var json = JSON.decode(val);
+        updateValue(json);
+        return true;
+      } catch (e) {
+        return super.onSetValue(val);
+      }
+    } else {
+      return super.onSetValue(val);
+    }
+  }
+
+  @override
+  updateValue(Object update, {bool force: false}) {
+    super.updateValue(update, force: force);
+    link.save();
+  }
+
+  @override
   onRemoving() {
     link.save();
   }
