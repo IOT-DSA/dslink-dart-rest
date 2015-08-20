@@ -24,6 +24,11 @@ A DSLink for serving and manipulating DSA data using a REST API.
 
 ## Create/Update Node
 
+### Behaviors
+
+- If the node already exists, the provided data is merged into the existing node.
+- When creating a new node, any parent node that does not exist is created.
+
 **Method**: PUT<br/>
 **Example Request**:
 ```json
