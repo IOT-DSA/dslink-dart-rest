@@ -279,6 +279,26 @@ main(List<String> args) async {
         link.save();
       });
     },
+    "createMetric": (String path) {
+      return new SimpleActionNode(path, (Map<String, dynamic> params) {
+        var name = params["name"];
+        var editor = params["editor"];
+        var type = params["type"];
+
+        var parent = new Path(path).parent;
+        var node = link.addNode("${parent.path}/${name}", {
+          r"$is": "rest",
+          r"$type": type,
+          r"$writable": "write"
+        });
+
+        if (editor != null && editor.isNotEmpty) {
+          node.configs[r"$editor"] = editor;
+        }
+
+        link.save();
+      });
+    },
     "remove": (String path) => new DeleteActionNode.forParent(path, link.provider)
   }, autoInitialize: false);
 
@@ -304,6 +324,8 @@ class RestNode extends SimpleNode {
       ]
     });
 
+    link.addNode("${path}/Create_Metric", CREATE_METRIC);
+
     link.addNode("${path}/Remove_Node", {
       r"$name": "Remove Node",
       r"$is": "remove",
@@ -316,6 +338,46 @@ class RestNode extends SimpleNode {
     link.save();
   }
 }
+
+final Map<String, dynamic> CREATE_METRIC = {
+  r"$name": "Create Metric",
+  r"$is": "createMetric",
+  r"$invokable": "write",
+  r"$result": "values",
+  r"$params": [
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "type",
+      "type": "enum",
+      "editor": buildEnumType([
+        "string",
+        "number",
+        "bool",
+        "color",
+        "gradient",
+        "fill",
+        "array",
+        "map"
+      ])
+    },
+    {
+      "name": "editor",
+      "type": "enum",
+      "editor": buildEnumType([
+        "none",
+        "textarea",
+        "password",
+        "daterange",
+        "date"
+      ]),
+      "default": "none"
+    }
+  ],
+  r"$columns": []
+};
 
 class ServerNode extends SimpleNode {
   HttpServer server;
@@ -339,6 +401,8 @@ class ServerNode extends SimpleNode {
         }
       ]
     });
+
+    link.addNode("${path}/Create_Metric", CREATE_METRIC);
   }
 
   @override
