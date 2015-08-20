@@ -67,8 +67,7 @@ launchServer(int port, SimpleNode node) async {
       var p = new Path(n.path);
       var map = {
         "?name": p.name,
-        "?path": "/" + path.split("/").skip(2).join("/"),
-        "?fullPath": path
+        "?path": "/" + path.split("/").skip(2).join("/")
       };
 
       map.addAll(n.configs);
@@ -84,7 +83,6 @@ launchServer(int port, SimpleNode node) async {
         var x = new Path(child.path);
         map[key] = {
           "?name": x.name,
-          "?fullPath": x.path,
           "?path": "/" + x.path.split("/").skip(2).join("/")
         }..addAll(child.getSimpleMap());
       }
@@ -138,7 +136,7 @@ launchServer(int port, SimpleNode node) async {
         var node = link.provider.getNode(path);
         Map map;
         if (json.keys.length == 1 && json.keys.contains("?value")) {
-          node.updateValue(json["?value"]);
+          node.updateValue(new ValueUpdate(json["?value"], ts: ValueUpdate.getTs()));
           map = getNodeMap(node);
         } else {
           map = getNodeMap(node);
