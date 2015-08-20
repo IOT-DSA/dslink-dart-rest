@@ -156,7 +156,9 @@ launchServer(int port, SimpleNode node) async {
     try {
       await handleRequest(request);
     } catch (e) {
-      request.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      try {
+        request.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      } catch (e) {}
       request.response.writeln("Internal Server Error:");
       request.response.writeln(e);
       request.response.close();
