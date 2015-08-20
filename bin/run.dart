@@ -78,17 +78,25 @@ launchServer(int port, SimpleNode node) async {
       response.close();
       return;
     } else if (method == "PUT") {
+      var json = await readJSONData(request);
+      var node = link.addNode(path, json);
       if (link.provider.getNode(path) != null) {
-        response.statusCode = HttpStatus.CONFLICT;
-        response.writeln(toJSON({
-          "error": "Node Already Exists"
-        }));
+        Map map;
+        if (json.keys.length == 1 && json.keys.contains("?value")) {
+          node.updateValue(json["?value"]);
+          map = getNodeMap(node);
+        } else {
+          map = getNodeMap(node);
+          map.addAll(json);
+          map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
+          node.load(map);
+        }
+        response.headers.contentType = ContentType.JSON;
+        response.writeln(toJSON(map));
         response.close();
         return;
       }
 
-      var json = await readJSONData(request);
-      var node = link.addNode(path, json);
       var map = getNodeMap(node);
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
@@ -114,9 +122,8 @@ launchServer(int port, SimpleNode node) async {
         node.updateValue(json["?value"]);
         map = getNodeMap(node);
       } else {
-        map = getNodeMap(node);
+        map = {};
         map.addAll(json);
-        map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
         node.load(map);
       }
       response.headers.contentType = ContentType.JSON;
