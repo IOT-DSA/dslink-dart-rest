@@ -31,7 +31,7 @@ launchServer(bool local, int port, SimpleNode node) async {
   handleRequest(HttpRequest request) async {
     HttpResponse response = request.response;
 
-    Uri uri = request.requestedUri;
+    Uri uri = request.uri;
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
     String path = "${node.path}${ourPath}";
@@ -180,7 +180,7 @@ launchServer(bool local, int port, SimpleNode node) async {
       if (json.keys.length == 1 && json.keys.contains("?value")) {
         node.updateValue(json["?value"]);
         map = getNodeMap(node);
-      } else if (uri.query == "val") {
+      } else if (uri.queryParameters.containsKey("val")) {
         node.updateValue(json);
         map = getNodeMap(node);
       } else {
