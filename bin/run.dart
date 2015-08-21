@@ -180,6 +180,9 @@ launchServer(bool local, int port, SimpleNode node) async {
       if (json.keys.length == 1 && json.keys.contains("?value")) {
         node.updateValue(json["?value"]);
         map = getNodeMap(node);
+      } else if (uri.query == "val") {
+        node.updateValue(json);
+        map = getNodeMap(node);
       } else {
         map = {};
         map.addAll(json);
