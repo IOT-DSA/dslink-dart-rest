@@ -31,7 +31,7 @@ launchServer(bool local, int port, SimpleNode node) async {
   handleRequest(HttpRequest request) async {
     HttpResponse response = request.response;
 
-    Uri uri = request.uri;
+    Uri uri = request.requestedUri;
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
     String path = "${node.path}${ourPath}";
@@ -167,7 +167,7 @@ launchServer(bool local, int port, SimpleNode node) async {
       var json = await readJSONData(request);
 
       if (node == null) {
-        node = link.addNode(path, await readJSONData(request));
+        node = link.addNode(path, json);
         var map = getNodeMap(node);
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON(map));
