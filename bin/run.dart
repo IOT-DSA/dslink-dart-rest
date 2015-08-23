@@ -33,6 +33,11 @@ launchServer(bool local, int port, ServerNode serverNode) async {
     Uri uri = request.uri;
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
+
+    if (ourPath.endsWith("/")) {
+      ourPath = ourPath.substring(0, ourPath.length - 1);
+    }
+
     String hostPath = "${serverNode.path}${ourPath}";
     if (hostPath.endsWith("/")) {
       hostPath = hostPath.substring(0, hostPath.length - 1);
