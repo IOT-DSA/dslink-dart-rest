@@ -13,3 +13,4 @@ out/
 .c9*
 .dslink.key
 nodes.json
+.packages

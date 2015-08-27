@@ -232,7 +232,47 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         } else if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
           await link.requester.set(ourPath, json);
           response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(await getRemoteNodeMap(await link.requester.getRemoteNode(ourPath))));
+          response.writeln(toJSON(await getRemoteNodeMap(
+              await link.requester.getRemoteNode(ourPath))));
+          response.close();
+          return;
+        } else if (uri.queryParameters.containsKey("invoke")) {
+          var node = await link.requester.getRemoteNode(ourPath);
+          var updates = await link.requester.invoke(ourPath, json).toList().timeout(const Duration(seconds: 20));
+          if (node.configs[r"$invokable"] == null) {
+            response.statusCode = HttpStatus.NOT_IMPLEMENTED;
+            response.headers.contentType = ContentType.JSON;
+            response.writeln(toJSON({
+              "error": "Node is not invokable"
+            }));
+            response.close();
+            return;
+          }
+
+          var result = {};
+
+          result.addAll({
+            "columns": [],
+            "rows": []
+          });
+          for (RequesterInvokeUpdate update in updates) {
+            if (update.error != null) {
+              result.clear();
+              result["error"] = {
+                "message": update.error.msg,
+                "detail": update.error.detail,
+                "path": update.error.path,
+                "phase": update.error.phase
+              };
+              response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+              break;
+            }
+            result["columns"].addAll(update.columns.map((x) => x.getData()).toList());
+            result["rows"].addAll(update.rows);
+          }
+
+          response.headers.contentType = ContentType.JSON;
+          response.writeln(toJSON(result));
           response.close();
           return;
         } else {
