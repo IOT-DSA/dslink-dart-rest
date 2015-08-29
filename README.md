@@ -89,3 +89,31 @@ A DSLink for serving and manipulating DSA data using a REST API.
   "?value": 30
 }
 ```
+
+## WebHook
+
+You can use a node path as a WebHook for services that use this kind of pattern.
+
+Whatever is posted to the URL will become the value of the node.
+
+**URL**: `http://host:port/path/to/node?value`<br/>
+**Method**: POST<br/>
+**Example Request**:
+```json
+{
+  "my_key": "my_value"
+}
+```
+
+**Example Response**:
+```json
+{
+  "?name": "hook",
+  "?path": "/data/hook",
+  "$is": "node",
+  "$type": "map",
+  "?value": {
+    "my_key": "my_value"
+  }
+}
+```
