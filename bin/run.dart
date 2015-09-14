@@ -34,12 +34,12 @@ launchServer(bool local, int port, ServerNode serverNode) async {
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
 
-    if (ourPath.endsWith("/")) {
+    if (ourPath != "/" && ourPath.endsWith("/")) {
       ourPath = ourPath.substring(0, ourPath.length - 1);
     }
 
     String hostPath = "${serverNode.path}${ourPath}";
-    if (hostPath.endsWith("/")) {
+    if (hostPath != "/" && hostPath.endsWith("/")) {
       hostPath = hostPath.substring(0, hostPath.length - 1);
     }
 
@@ -139,8 +139,19 @@ launchServer(bool local, int port, ServerNode serverNode) async {
     if (method == "GET") {
       if (!serverNode.isDataHost) {
         var node = await link.requester.getRemoteNode(ourPath);
-        response.headers.contentType = ContentType.JSON;
-        response.writeln(toJSON(await getRemoteNodeMap(node)));
+        var json = await getRemoteNodeMap(node);
+        if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+          json = json["?value"];
+          if (json is Map || json is List) {
+            response.headers.contentType = ContentType.JSON;
+            response.write(toJSON(json));
+          } else {
+            response.write(json);
+          }
+        } else {
+          response.headers.contentType = ContentType.JSON;
+          response.writeln(toJSON(json));
+        }
         response.close();
         return;
       }
@@ -159,8 +170,18 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       var map = getNodeMap(n);
 
-      response.headers.contentType = ContentType.JSON;
-      response.writeln(toJSON(map));
+      if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+        map = map["?value"];
+        if (map is Map || map is List) {
+          response.headers.contentType = ContentType.JSON;
+          response.write(toJSON(map));
+        } else {
+          response.write(map);
+        }
+      } else {
+        response.headers.contentType = ContentType.JSON;
+        response.writeln(toJSON(map));
+      }
       response.close();
       return;
     } else if (method == "PUT") {
