@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{name}}</title>
+
+    <style>
+      .value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>{{name}}</h1>
+
+    <h1 class="value"></h1>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.min.js"></script>
+
+    <script>
+      var path = "{path}";
+
+      var ws = new WebSocket(
+          window.location.href
+              .substring(0, window.location.href.length - 5)
+              .replace("http:", "ws:")
+              .replace("https:", "wss:") + "?subscribe"
+      );
+
+      var $value = $(".value");
+
+      ws.addEventListener("message", function (event) {
+        var json = JSON.parse(event.data);
+
+        if (typeof json.value !== "undefined") {
+          $value.text(json.value);
+        }
+      })
+    </script>
+  </body>
+</html>

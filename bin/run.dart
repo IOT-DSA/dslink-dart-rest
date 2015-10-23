@@ -7,10 +7,18 @@ import "package:dslink/nodes.dart";
 
 import "package:http_multi_server/http_multi_server.dart";
 
+import "package:mustache4dart/mustache4dart.dart";
+
 LinkProvider link;
 
-JsonEncoder jsonEncoder = new JsonEncoder.withIndent("  ");
+JsonEncoder jsonUglyEncoder = const JsonEncoder();
+JsonEncoder jsonEncoder = const JsonEncoder.withIndent("  ");
 String toJSON(input) => jsonEncoder.convert(input);
+
+String valuePageHtml = new File("res/value_page.html").readAsStringSync();
+String directoryListPageHtml = new File("res/directory_list.html").readAsStringSync();
+Function valuePageTemplate = compile(valuePageHtml);
+Function directoryListPageTemplate = compile(directoryListPageHtml);
 
 launchServer(bool local, int port, ServerNode serverNode) async {
   List<HttpServer> servers = <HttpServer>[];
@@ -55,6 +63,17 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       return;
     }
 
+    if (ourPath == "/favicon.ico") {
+      response.statusCode = HttpStatus.NOT_FOUND;
+      response.writeln("Not Found.");
+      response.close();
+      return;
+    }
+
+    if (ourPath == "/index.html") {
+      ourPath = "/.html";
+    }
+
     Path p = new Path(hostPath);
 
     Future<Map> getRemoteNodeMap(RemoteNode n) async {
@@ -67,7 +86,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       var p = new Path(n.remotePath);
       var map = {
         "?name": p.name,
-        "?path": ourPath
+        "?path": ourPath,
+        "?url": request.uri.path
       };
 
       map.addAll(n.configs);
@@ -77,9 +97,11 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         RemoteNode child = n.children[key];
 
         var x = new Path(child.remotePath);
+        var trp = (ourPath == "/" ? "" : ourPath) + "/" + key;
         map[key] = {
           "?name": x.name,
-          "?path": (ourPath == "/" ? "" : ourPath) + "/" + key
+          "?path": trp,
+          "?url": Uri.encodeFull(trp)
         }..addAll(child.getSimpleMap());
       }
 
@@ -138,8 +160,54 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
     if (method == "GET") {
       if (!serverNode.isDataHost) {
-        var node = await link.requester.getRemoteNode(ourPath);
+        var isHtml = false;
+        if (ourPath.endsWith(".html")) {
+          ourPath = ourPath.substring(0, ourPath.length - 5);
+          isHtml = true;
+        }
+
+        var p = new Path(ourPath);
+        if (!p.valid) {
+          response.statusCode = HttpStatus.BAD_REQUEST;
+          response.writeln(toJSON({
+            "error": "Invalid Path: ${p.path}"
+          }));
+          response.close();
+          return;
+        }
+        var node = await link.requester.getRemoteNode(p.path);
         var json = await getRemoteNodeMap(node);
+
+        if (isHtml) {
+          response.headers.contentType = ContentType.HTML;
+          if (json[r"$type"] != null) {
+            response.writeln(valuePageTemplate({
+              "name": json.containsKey(r"$name") ? json[r"$name"] : json["?name"],
+              "path": json["?path"]
+            }));
+          } else {
+            response.writeln(directoryListPageTemplate({
+              "name": json.containsKey(r"$name") ? json[r"$name"] : json["?name"],
+              "path": json["?path"],
+              "url": json["?url"],
+              "parent": p.parentPath + ".html",
+              "children": json.keys.where((String x) => x.isNotEmpty && !((const ["@", "!", "?", r"$"]).contains(x[0]))).map((x) {
+                var n = json[x];
+                return {
+                  "name": n["?name"],
+                  "url": n["?url"],
+                  "path": n["?path"],
+                  "isValue": n[r"$type"] != null,
+                  "isAction": n[r"$invokable"] != null,
+                  "isNode": n[r"$invokable"] == null && n[r"$type"] == null
+                };
+              }).toList()
+            }));
+          }
+          response.close();
+          return;
+        }
+
         if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
           json = json["?value"];
           if (json is Map || json is List) {
@@ -148,6 +216,33 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           } else {
             response.write(json);
           }
+        } else if (uri.queryParameters.containsKey("watch") || uri.queryParameters.containsKey("subscribe")) {
+          if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
+            request.response.statusCode = HttpStatus.BAD_REQUEST;
+            request.response.writeln("Bad Request: Expected WebSocket Upgrad.e");
+            request.response.close();
+            return;
+          }
+
+          var socket = await WebSocketTransformer.upgrade(request);
+
+          ReqSubscribeListener sub;
+          Function onValueUpdate;
+          onValueUpdate = (ValueUpdate update) {
+            if (socket.closeCode != null) {
+              return;
+            }
+
+            socket.add(jsonUglyEncoder.convert({
+              "value": update.value,
+              "timestamp": update.ts
+            }));
+          };
+          sub = link.requester.subscribe(ourPath, onValueUpdate);
+          socket.done.then((_) {
+            sub.cancel();
+          });
+          return;
         } else {
           response.headers.contentType = ContentType.JSON;
           response.writeln(toJSON(json));
@@ -178,6 +273,36 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         } else {
           response.write(map);
         }
+      } else if (uri.queryParameters.containsKey("watch") || uri.queryParameters.containsKey("subscribe")) {
+        if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
+          request.response.statusCode = HttpStatus.BAD_REQUEST;
+          request.response.writeln("Bad Request: Expected WebSocket Upgrade.");
+          request.response.close();
+          return;
+        }
+
+        var socket = await WebSocketTransformer.upgrade(request);
+
+        RespSubscribeListener sub;
+        sub = n.subscribe((ValueUpdate update) {
+          if (socket.closeCode != null) {
+            if (sub != null) {
+              sub.cancel();
+            }
+            return;
+          }
+
+          socket.add(jsonUglyEncoder.convert({
+            "value": update.value,
+            "timestamp": update.ts
+          }));
+        });
+
+        socket.done.then((_) {
+          sub.cancel();
+          sub = null;
+        });
+        return;
       } else {
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON(map));
