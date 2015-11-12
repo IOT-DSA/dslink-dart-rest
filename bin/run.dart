@@ -1,6 +1,7 @@
 import "dart:async";
 import "dart:convert";
 import "dart:io";
+import "dart:typed_data";
 
 import "package:dslink/dslink.dart";
 import "package:dslink/nodes.dart";
@@ -8,6 +9,9 @@ import "package:dslink/nodes.dart";
 import "package:http_multi_server/http_multi_server.dart";
 
 import "package:mustache4dart/mustache4dart.dart";
+import "package:crypto/crypto.dart";
+
+import "package:mime_type/mime_type.dart";
 
 LinkProvider link;
 
@@ -107,7 +111,15 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       if (n.configs.containsKey(r"$type")) {
         var val = await link.requester.getNodeValue(ourPath);
-        map["?value"] = val.value;
+        var value = val.value;
+        if (value is ByteData) {
+          value = value.buffer.asUint8List();
+        }
+
+        if (value is Uint8List) {
+          value = CryptoUtils.bytesToBase64(value);
+        }
+        map["?value"] = value;
         map["?value_timestamp"] = val.ts;
       }
 
@@ -181,9 +193,26 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         if (isHtml) {
           response.headers.contentType = ContentType.HTML;
           if (json[r"$type"] != null) {
+            var isImage = false;
+
+            if (json[r"$binaryType"] == "image") {
+              isImage = true;
+            }
+
+            if (json["@filePath"] is String) {
+              var mt = mime(json["@filePath"]);
+              if (mt is String && mt.contains("image")) {
+                isImage = true;
+              }
+            }
+
             response.writeln(valuePageTemplate({
               "name": json.containsKey(r"$name") ? json[r"$name"] : json["?name"],
-              "path": json["?path"]
+              "path": json["?path"],
+              "editor": json[r"$editor"],
+              "binaryType": json[r"$binaryType"],
+              "isImage": isImage,
+              "isNotImage": !isImage
             }));
           } else {
             response.writeln(directoryListPageTemplate({
@@ -233,10 +262,28 @@ launchServer(bool local, int port, ServerNode serverNode) async {
               return;
             }
 
-            socket.add(jsonUglyEncoder.convert({
-              "value": update.value,
-              "timestamp": update.ts
-            }));
+            var value = update.value;
+            var ts = update.ts;
+            var isBinary = value is ByteData || value is Uint8List;
+
+            if (value is ByteData) {
+              value = value.buffer.asUint8List();
+            }
+
+            if (value is Uint8List) {
+              value = CryptoUtils.bytesToBase64(value);
+            }
+
+            var msg = {
+              "value": value,
+              "timestamp": ts
+            };
+
+            if (isBinary) {
+              msg["bin"] = true;
+            }
+
+            socket.add(jsonUglyEncoder.convert(msg));
           };
           sub = link.requester.subscribe(ourPath, onValueUpdate);
           socket.done.then((_) {
@@ -591,7 +638,7 @@ main(List<String> args) async {
         changed = true;
       });
     },
-    "remove": (String path) => new DeleteActionNode.forParent(path, link.provider)
+    "remove": (String path) => new DeleteActionNode.forParent(path, link.provider as MutableNodeProvider)
   }, autoInitialize: false, isRequester: true, isResponder: true);
 
   var nodes = {
