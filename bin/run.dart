@@ -80,7 +80,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
     Path p = new Path(hostPath);
 
-    Future<Map> getRemoteNodeMap(RemoteNode n) async {
+    Future<Map> getRemoteNodeMap(RemoteNode n, {Uri uri}) async {
       if (n == null) {
         return {
           "error": "No Such Node"
@@ -112,12 +112,14 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       if (n.configs.containsKey(r"$type")) {
         var val = await link.requester.getNodeValue(ourPath);
         var value = val.value;
-        if (value is ByteData) {
-          value = value.buffer.asUint8List();
-        }
+        if (uri == null || (!uri.queryParameters.containsKey("val") && !uri.queryParameters.containsKey("value"))) {
+          if (value is ByteData) {
+            value = value.buffer.asUint8List();
+          }
 
-        if (value is Uint8List) {
-          value = CryptoUtils.bytesToBase64(value);
+          if (value is Uint8List) {
+            value = CryptoUtils.bytesToBase64(value);
+          }
         }
         map["?value"] = value;
         map["?value_timestamp"] = val.ts;
@@ -126,7 +128,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       return map;
     }
 
-    Map getNodeMap(SimpleNode n) {
+    Map getNodeMap(SimpleNode n, {Uri uri}) {
       if (n == null) {
         return {
           "error": "No Such Node"
@@ -188,24 +190,24 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           return;
         }
         var node = await link.requester.getRemoteNode(p.path);
-        var json = await getRemoteNodeMap(node);
+        var json = await getRemoteNodeMap(node, uri: uri);
+
+        var isImage = false;
+
+        if (json[r"$binaryType"] == "image") {
+          isImage = true;
+        }
+
+        if (json["@filePath"] is String) {
+          var mt = mime(json["@filePath"]);
+          if (mt is String && mt.contains("image")) {
+            isImage = true;
+          }
+        }
 
         if (isHtml) {
           response.headers.contentType = ContentType.HTML;
           if (json[r"$type"] != null) {
-            var isImage = false;
-
-            if (json[r"$binaryType"] == "image") {
-              isImage = true;
-            }
-
-            if (json["@filePath"] is String) {
-              var mt = mime(json["@filePath"]);
-              if (mt is String && mt.contains("image")) {
-                isImage = true;
-              }
-            }
-
             response.writeln(valuePageTemplate({
               "name": json.containsKey(r"$name") ? json[r"$name"] : json["?name"],
               "path": json["?path"],
@@ -239,7 +241,10 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
         if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
           json = json["?value"];
-          if (json is Map || json is List) {
+          if (json is ByteData) {
+            response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
+            response.add(json.buffer.asUint8List());
+          } else if (json is Map || json is List) {
             response.headers.contentType = ContentType.JSON;
             response.write(toJSON(json));
           } else {
@@ -314,7 +319,10 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
         map = map["?value"];
-        if (map is Map || map is List) {
+        if (map is ByteData) {
+          response.headers.contentType = ContentType.BINARY;
+          response.add(map.buffer.asUint8List());
+        } else if (map is Map || map is List) {
           response.headers.contentType = ContentType.JSON;
           response.write(toJSON(map));
         } else {
@@ -420,13 +428,13 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           var val = json["?value"];
           await link.requester.set(ourPath, val);
           response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(await getRemoteNodeMap(await link.requester.getRemoteNode(ourPath))));
+          response.writeln(toJSON(await getRemoteNodeMap(await link.requester.getRemoteNode(ourPath), uri: uri)));
           response.close();
         } else if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
           await link.requester.set(ourPath, json);
           response.headers.contentType = ContentType.JSON;
           response.writeln(toJSON(await getRemoteNodeMap(
-              await link.requester.getRemoteNode(ourPath))));
+              await link.requester.getRemoteNode(ourPath), uri: uri)));
           response.close();
           return;
         } else if (uri.queryParameters.containsKey("invoke")) {
