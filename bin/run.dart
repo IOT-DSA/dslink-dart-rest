@@ -240,7 +240,21 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         }
 
         if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+          String etag = json["?value_timestamp"];
+
+          response.headers.set("ETag", etag);
+          response.headers.set("Cache-Control", "public, max-age=31536000");
           json = json["?value"];
+
+          if (request.headers["If-None-Match"] != null && request.headers["If-None-Match"].isNotEmpty) {
+            var lastEtag = request.headers.value("If-None-Match");
+            if (etag == lastEtag) {
+              response.statusCode = HttpStatus.NOT_MODIFIED;
+              response.close();
+              return;
+            }
+          }
+
           if (json is ByteData) {
             response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
             response.add(json.buffer.asUint8List());
