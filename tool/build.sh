@@ -7,4 +7,4 @@ dart2js bin/run.dart -o build/bin/run.dart --output-type=dart --categories=Serve
 cp dslink.json build/dslink.json
 cp -R res build/res
 cd build/
-zip -r ../../../files/rest.zip .
+zip -r ../../../files/dslink-dart-rest.zip .
