@@ -26,8 +26,12 @@ Function directoryListPageTemplate = compile(directoryListPageHtml);
 
 launchServer(bool local, int port, ServerNode serverNode) async {
   List<HttpServer> servers = <HttpServer>[];
-  InternetAddress ipv4 = local ? InternetAddress.LOOPBACK_IP_V4 : InternetAddress.ANY_IP_V4;
-  InternetAddress ipv6 = local ? InternetAddress.LOOPBACK_IP_V6 : InternetAddress.ANY_IP_V6;
+  InternetAddress ipv4 = local ?
+    InternetAddress.LOOPBACK_IP_V4 :
+    InternetAddress.ANY_IP_V4;
+  InternetAddress ipv6 = local ?
+    InternetAddress.LOOPBACK_IP_V6 :
+    InternetAddress.ANY_IP_V6;
 
   try {
     servers.add(await HttpServer.bind(ipv4, port));
@@ -112,7 +116,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       if (n.configs.containsKey(r"$type")) {
         var val = await link.requester.getNodeValue(ourPath);
         var value = val.value;
-        if (uri == null || (!uri.queryParameters.containsKey("val") && !uri.queryParameters.containsKey("value"))) {
+        if (uri == null || (!uri.queryParameters.containsKey("val") &&
+          !uri.queryParameters.containsKey("value"))) {
           if (value is ByteData) {
             value = value.buffer.asUint8List();
           }
@@ -222,7 +227,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
               "path": json["?path"],
               "url": json["?url"],
               "parent": p.parentPath + ".html",
-              "children": json.keys.where((String x) => x.isNotEmpty && !((const ["@", "!", "?", r"$"]).contains(x[0]))).map((x) {
+              "children": json.keys.where((String x) => x.isNotEmpty && !(
+                (const ["@", "!", "?", r"$"]).contains(x[0]))).map((x) {
                 var n = json[x];
                 return {
                   "name": n["?name"],
@@ -264,10 +270,11 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           } else {
             response.write(json);
           }
-        } else if (uri.queryParameters.containsKey("watch") || uri.queryParameters.containsKey("subscribe")) {
+        } else if (uri.queryParameters.containsKey("watch") ||
+          uri.queryParameters.containsKey("subscribe")) {
           if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
             request.response.statusCode = HttpStatus.BAD_REQUEST;
-            request.response.writeln("Bad Request: Expected WebSocket Upgrad.e");
+            request.response.writeln("Bad Request: Expected WebSocket Upgrade.");
             request.response.close();
             return;
           }
@@ -331,7 +338,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       var map = getNodeMap(n);
 
-      if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+      if (uri.queryParameters.containsKey("val") ||
+        uri.queryParameters.containsKey("value")) {
         map = map["?value"];
         if (map is ByteData) {
           response.headers.contentType = ContentType.BINARY;
@@ -342,7 +350,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         } else {
           response.write(map);
         }
-      } else if (uri.queryParameters.containsKey("watch") || uri.queryParameters.containsKey("subscribe")) {
+      } else if (uri.queryParameters.containsKey("watch") ||
+        uri.queryParameters.containsKey("subscribe")) {
         if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
           request.response.statusCode = HttpStatus.BAD_REQUEST;
           request.response.writeln("Bad Request: Expected WebSocket Upgrade.");
@@ -442,9 +451,14 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           var val = json["?value"];
           await link.requester.set(ourPath, val);
           response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(await getRemoteNodeMap(await link.requester.getRemoteNode(ourPath), uri: uri)));
+          response.writeln(
+              toJSON(await getRemoteNodeMap(
+                  await link.requester.getRemoteNode(ourPath)
+              , uri: uri))
+          );
           response.close();
-        } else if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+        } else if (uri.queryParameters.containsKey("val") ||
+          uri.queryParameters.containsKey("value")) {
           await link.requester.set(ourPath, json);
           response.headers.contentType = ContentType.JSON;
           response.writeln(toJSON(await getRemoteNodeMap(
@@ -453,7 +467,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
           return;
         } else if (uri.queryParameters.containsKey("invoke")) {
           var node = await link.requester.getRemoteNode(ourPath);
-          var updates = await link.requester.invoke(ourPath, json).toList().timeout(const Duration(seconds: 20));
+
           if (node.configs[r"$invokable"] == null) {
             response.statusCode = HttpStatus.NOT_IMPLEMENTED;
             response.headers.contentType = ContentType.JSON;
@@ -464,6 +478,36 @@ launchServer(bool local, int port, ServerNode serverNode) async {
             return;
           }
 
+          var stream = link.requester.invoke(ourPath, json);
+          var updates = <RequesterInvokeUpdate>[];
+
+          StreamSubscription sub;
+          sub = stream.listen((RequesterInvokeUpdate update) {
+            updates.add(update);
+          });
+
+          int timeoutSeconds = 30;
+          if (uri.queryParameters.containsKey("timeout")) {
+            timeoutSeconds = int.parse(
+              uri.queryParameters["timeout"],
+              onError: (source) => 0
+            );
+          }
+
+          if (timeoutSeconds <= 0) {
+            timeoutSeconds = 30;
+          }
+
+          if (timeoutSeconds > 300) {
+            timeoutSeconds = 300;
+          }
+
+          var future = sub.asFuture().timeout(
+            new Duration(seconds: timeoutSeconds), onTimeout: () {
+            sub.cancel();
+          });
+
+          await future;
           var result = {};
 
           result.addAll({
@@ -482,7 +526,9 @@ launchServer(bool local, int port, ServerNode serverNode) async {
               response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
               break;
             }
-            result["columns"].addAll(update.columns.map((x) => x.getData()).toList());
+            result["columns"].addAll(
+              update.columns.map((x) => x.getData()).toList()
+            );
             result["rows"].addAll(update.rows);
           }
 
@@ -517,7 +563,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       if (json.keys.length == 1 && json.keys.contains("?value")) {
         node.updateValue(json["?value"]);
         map = getNodeMap(node);
-      } else if (uri.queryParameters.containsKey("val") || uri.queryParameters.containsKey("value")) {
+      } else if (uri.queryParameters.containsKey("val") ||
+          uri.queryParameters.containsKey("value")) {
         node.updateValue(json);
         map = getNodeMap(node);
       } else {
@@ -593,8 +640,11 @@ Future<Map> readJSONData(HttpRequest request) async {
 
 main(List<String> args) async {
   link = new LinkProvider(args, "REST-", profiles: {
-    "addServer": (String path) => new SimpleActionNode(path, (Map<String, dynamic> params) async {
-      int port = params["port"] is String  ? int.parse(params["port"]) : params["port"];
+    "addServer": (String path) => new SimpleActionNode(path,
+      (Map<String, dynamic> params) async {
+      int port = params["port"] is String  ?
+        int.parse(params["port"]) :
+        params["port"];
       bool local = params["local"];
       String type = params["type"];
       if (local == null) local = false;
@@ -660,11 +710,15 @@ main(List<String> args) async {
         changed = true;
       });
     },
-    "remove": (String path) => new DeleteActionNode.forParent(path, link.provider as MutableNodeProvider)
+    "remove": (String path) => new DeleteActionNode.forParent(
+      path,
+      link.provider as MutableNodeProvider,
+      onDelete: link.save
+    )
   }, autoInitialize: false, isRequester: true, isResponder: true);
 
   var nodes = {
-    "Add_Server": {
+    "addServer": {
       r"$name": "Add Server",
       r"$invokable": "write",
       r"$params": [
@@ -726,7 +780,7 @@ class RestNode extends SimpleNode {
 
   @override
   onCreated() {
-    link.addNode("${path}/Create_Node", {
+    link.addNode("${path}/createNode", {
       r"$name": "Create Node",
       r"$is": "create",
       r"$invokable": "write",
@@ -739,9 +793,9 @@ class RestNode extends SimpleNode {
       ]
     });
 
-    link.addNode("${path}/Create_Value", CREATE_VALUE);
+    link.addNode("${path}/createValue", CREATE_VALUE);
 
-    link.addNode("${path}/Remove_Node", {
+    link.addNode("${path}/remove", {
       r"$name": "Remove Node",
       r"$is": "remove",
       r"$invokable": "write"
@@ -834,7 +888,7 @@ class ServerNode extends SimpleNode {
     server = await launchServer(local, port, this);
 
     if (type == "Data Host") {
-      link.addNode("${path}/Create_Node", {
+      link.addNode("${path}/createNode", {
         r"$name": "Create Node",
         r"$is": "create",
         r"$invokable": "write",
@@ -847,7 +901,7 @@ class ServerNode extends SimpleNode {
         ]
       });
 
-      link.addNode("${path}/Create_Value", CREATE_VALUE);
+      link.addNode("${path}/createValue", CREATE_VALUE);
     }
   }
 
