@@ -415,8 +415,9 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         }
       }
 
-      if (link.provider.getNode(hostPath) != null) {
-        var node = link.provider.getNode(hostPath);
+      var ourNode = link.provider.getNode(hostPath);
+      if (ourNode is RestNode || ourNode is ServerNode) {
+        var node = ourNode;
         Map map;
         if (json.keys.length == 1 && json.keys.contains("?value")) {
           node.updateValue(new ValueUpdate(json["?value"], ts: ValueUpdate.getTs()));
