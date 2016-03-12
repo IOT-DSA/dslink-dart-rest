@@ -326,7 +326,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       SimpleNode n = link.getNode(hostPath);
 
-      if (n is! RestNode && n is! ServerNode) {
+      if (!(link.provider as SimpleNodeProvider).hasNode(hostPath)) {
         response.statusCode = HttpStatus.NOT_FOUND;
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON({
@@ -402,8 +402,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       var mp = p.parent;
       var pathsToCreate = [];
       while (!mp.isRoot) {
-        var rpn = link.getNode(mp.path);
-        if (rpn is! RestNode && rpn is! ServerNode) {
+        if (!(link.provider as SimpleNodeProvider).hasNode(mp.path)) {
           pathsToCreate.add(mp.path);
         }
         mp = mp.parent;
@@ -412,13 +411,14 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       if (pathsToCreate.isNotEmpty) {
         pathsToCreate.sort();
         for (var pr in pathsToCreate) {
-          link.addNode(pr, {});
+          link.addNode(pr, {
+            r"$is": "rest"
+          });
         }
       }
 
-      var ourNode = link.provider.getNode(hostPath);
-      if (ourNode is RestNode || ourNode is ServerNode) {
-        var node = ourNode;
+      if ((link.provider as SimpleNodeProvider).hasNode(hostPath)) {
+        var node = link[hostPath];
         Map map;
         if (json.keys.length == 1 && json.keys.contains("?value")) {
           node.updateValue(new ValueUpdate(json["?value"], ts: ValueUpdate.getTs()));
@@ -552,7 +552,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       SimpleNode node = link.getNode(hostPath);
 
-      if (node is RestNode || node is ServerNode) {
+      if (!((link.provider as SimpleNodeProvider).hasNode(hostPath))) {
         node = link.addNode(hostPath, json);
         var map = getNodeMap(node);
         response.headers.contentType = ContentType.JSON;
