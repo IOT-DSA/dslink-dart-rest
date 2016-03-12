@@ -142,7 +142,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       if (n is! RestNode && n is! ServerNode) {
         return {
-          "error": "Not a REST node"
+          "error": "No Such Node"
         };
       }
 
@@ -326,7 +326,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       SimpleNode n = link.getNode(hostPath);
 
-      if (link.provider.getNode(hostPath) == null) {
+      if (n is! RestNode && n is! ServerNode) {
         response.statusCode = HttpStatus.NOT_FOUND;
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON({
@@ -402,7 +402,8 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       var mp = p.parent;
       var pathsToCreate = [];
       while (!mp.isRoot) {
-        if (link.getNode(mp.path) == null) {
+        var rpn = link.getNode(mp.path);
+        if (rpn is! RestNode && rpn is! ServerNode) {
           pathsToCreate.add(mp.path);
         }
         mp = mp.parent;
@@ -436,6 +437,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         return;
       }
 
+      json[r"$is"] = "rest";
       var node = link.addNode(hostPath, json);
       var map = getNodeMap(node);
       map[r"$is"] = "rest";
@@ -550,7 +552,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
 
       SimpleNode node = link.getNode(hostPath);
 
-      if (node == null) {
+      if (node is RestNode || node is ServerNode) {
         node = link.addNode(hostPath, json);
         var map = getNodeMap(node);
         response.headers.contentType = ContentType.JSON;
@@ -592,7 +594,7 @@ launchServer(bool local, int port, ServerNode serverNode) async {
       SimpleNode node = link.getNode(hostPath);
       var map = getNodeMap(node);
 
-      if (node == null) {
+      if (node is RestNode || node is ServerNode) {
         response.statusCode = HttpStatus.NOT_FOUND;
         response.headers.contentType = ContentType.JSON;
         response.writeln(toJSON({
