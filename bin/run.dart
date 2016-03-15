@@ -5,6 +5,7 @@ import "dart:typed_data";
 
 import "package:dslink/dslink.dart";
 import "package:dslink/nodes.dart";
+import "package:dslink/utils.dart";
 
 import "package:http_multi_server/http_multi_server.dart";
 
@@ -24,7 +25,7 @@ String directoryListPageHtml = new File("res/directory_list.html").readAsStringS
 Function valuePageTemplate = compile(valuePageHtml);
 Function directoryListPageTemplate = compile(directoryListPageHtml);
 
-launchServer(bool local, int port, ServerNode serverNode) async {
+launchServer(bool local, int port, String pwd, ServerNode serverNode) async {
   List<HttpServer> servers = <HttpServer>[];
   InternetAddress ipv4 = local ?
     InternetAddress.LOOPBACK_IP_V4 :
@@ -44,6 +45,20 @@ launchServer(bool local, int port, ServerNode serverNode) async {
   HttpMultiServer server = new HttpMultiServer(servers);
 
   handleRequest(HttpRequest request) async {
+    if (pwd != null && pwd.isNotEmpty) {
+      String expect = CryptoUtils.bytesToBase64(UTF8.encode("dsa:${pwd}"));
+      var found = request.headers.value("Authorization");
+
+      if (found != "Basic ${expect}") {
+        request.response.headers.set(
+          "WWW-Authenticate", 'Basic realm="DSA Rest Link"'
+        );
+        request.response.statusCode = 401;
+        request.response.close();
+        return;
+      }
+    }
+
     HttpResponse response = request.response;
 
     Uri uri = request.uri;
@@ -173,6 +188,11 @@ launchServer(bool local, int port, ServerNode serverNode) async {
         map["?value"] = n.lastValueUpdate.value;
         map["?value_timestamp"] = n.lastValueUpdate.ts;
       }
+
+      map.keys
+        .where((k) => k.toString().startsWith(r"$$"))
+        .toList()
+        .forEach(map.remove);
 
       return map;
     }
@@ -650,6 +670,7 @@ main(List<String> args) async {
         params["port"];
       bool local = params["local"];
       String type = params["type"];
+      String pwd = params["password"];
       if (local == null) local = false;
 
       try {
@@ -666,6 +687,7 @@ main(List<String> args) async {
         r"$server_port": port,
         r"$server_local": local,
         r"$server_type": type,
+        r"$$server_password": pwd,
         "Remove": {
           r"$is": "remove",
           r"$invokable": "write"
@@ -746,6 +768,11 @@ main(List<String> args) async {
           "type": "enum[Data Host,Data Client]",
           "default": "Data Host",
           "description": "Data Type"
+        },
+        {
+          "name": "password",
+          "type": "password",
+          "placeholder": "Optional Password"
         }
       ],
       r"$result": "values",
@@ -882,13 +909,14 @@ class ServerNode extends SimpleNode {
     var port = configs[r"$server_port"];
     var local = configs[r"$server_local"];
     var type = configs[r"$server_type"];
+    var pwd = configs[r"$$server_password"];
     if (local == null) local = false;
     if (type == null) type = "Data Host";
 
     configs[r"$server_local"] = local;
     configs[r"$server_type"] = type;
 
-    server = await launchServer(local, port, this);
+    server = await launchServer(local, port, pwd, this);
 
     if (type == "Data Host") {
       link.addNode("${path}/createNode", {
