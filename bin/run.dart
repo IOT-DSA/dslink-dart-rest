@@ -25,7 +25,11 @@ String directoryListPageHtml = new File("res/directory_list.html").readAsStringS
 Function valuePageTemplate = compile(valuePageHtml);
 Function directoryListPageTemplate = compile(directoryListPageHtml);
 
-launchServer(bool local, int port, String pwd, ServerNode serverNode) async {
+launchServer(bool local, int port, String pwd, String user, ServerNode serverNode) async {
+  if (user == null || user.isEmpty) {
+    user = "dsa";
+  }
+
   List<HttpServer> servers = <HttpServer>[];
   InternetAddress ipv4 = local ?
     InternetAddress.LOOPBACK_IP_V4 :
@@ -46,7 +50,7 @@ launchServer(bool local, int port, String pwd, ServerNode serverNode) async {
 
   handleRequest(HttpRequest request) async {
     if (pwd != null && pwd.isNotEmpty) {
-      String expect = CryptoUtils.bytesToBase64(UTF8.encode("dsa:${pwd}"));
+      String expect = CryptoUtils.bytesToBase64(UTF8.encode("${user}:${pwd}"));
       var found = request.headers.value("Authorization");
 
       if (found != "Basic ${expect}") {
@@ -671,6 +675,7 @@ main(List<String> args) async {
       bool local = params["local"];
       String type = params["type"];
       String pwd = params["password"];
+      String user = params["username"];
       if (local == null) local = false;
 
       try {
@@ -688,6 +693,7 @@ main(List<String> args) async {
         r"$server_local": local,
         r"$server_type": type,
         r"$$server_password": pwd,
+        r"$$server_username": user,
         "Remove": {
           r"$is": "remove",
           r"$invokable": "write"
@@ -770,8 +776,14 @@ main(List<String> args) async {
           "description": "Data Type"
         },
         {
+          "name": "username",
+          "type": "string",
+          "placeholder": "Optional Username"
+        },
+        {
           "name": "password",
-          "type": "password",
+          "type": "string",
+          "editor": "password",
           "placeholder": "Optional Password"
         }
       ],
@@ -909,6 +921,7 @@ class ServerNode extends SimpleNode {
     var port = configs[r"$server_port"];
     var local = configs[r"$server_local"];
     var type = configs[r"$server_type"];
+    var user = configs[r"$$server_username"];
     var pwd = configs[r"$$server_password"];
     if (local == null) local = false;
     if (type == null) type = "Data Host";
@@ -916,7 +929,7 @@ class ServerNode extends SimpleNode {
     configs[r"$server_local"] = local;
     configs[r"$server_type"] = type;
 
-    server = await launchServer(local, port, pwd, this);
+    server = await launchServer(local, port, pwd, user, this);
 
     if (type == "Data Host") {
       link.addNode("${path}/createNode", {
