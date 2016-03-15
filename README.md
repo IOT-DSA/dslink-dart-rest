@@ -4,6 +4,8 @@ A DSLink for serving and manipulating DSA data using a REST API.
 
 ## API
 
+If the REST server has a password, use `dsa` as the basic authentication username, and the password that is configured as the password.
+
 **Node URL**: `http://host:port/path/to/node`
 
 ### Fetch Node
