@@ -114,7 +114,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
       var map = {
         "?name": p.name,
         "?path": ourPath,
-        "?url": request.uri.path
+        "?url": request.requestedUri.toString()
       };
 
       map.addAll(n.configs);
@@ -128,7 +128,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
         map[key] = {
           "?name": x.name,
           "?path": trp,
-          "?url": Uri.encodeFull(trp)
+          "?url": request.requestedUri.replace(path: Uri.encodeFull(trp)).toString()
         }..addAll(child.getSimpleMap());
       }
 
