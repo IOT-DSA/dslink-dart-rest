@@ -218,7 +218,19 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           response.close();
           return;
         }
-        var node = await link.requester.getRemoteNode(p.path);
+
+        var node = await link.requester.getRemoteNode(p.path)
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+        if (node == null) {
+          response.headers.contentType = ContentType.JSON;
+          response.writeln(toJSON({
+            "error": "Node not found."
+          }));
+          response.close();
+          return;
+        }
+
         var json = await getRemoteNodeMap(node, uri: uri);
 
         var isImage = false;
@@ -493,7 +505,17 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           response.close();
           return;
         } else if (uri.queryParameters.containsKey("invoke")) {
-          var node = await link.requester.getRemoteNode(ourPath);
+          var node = await link.requester.getRemoteNode(ourPath)
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+          if (node == null) {
+            response.headers.contentType = ContentType.JSON;
+            response.writeln(toJSON({
+              "error": "Node not found."
+            }));
+            response.close();
+            return;
+          }
 
           if (node.configs[r"$invokable"] == null) {
             response.statusCode = HttpStatus.NOT_IMPLEMENTED;
