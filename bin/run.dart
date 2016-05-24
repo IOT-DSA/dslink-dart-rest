@@ -486,7 +486,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
       var json = await readJSONData(request);
 
       if (!serverNode.isDataHost) {
-        if (json.keys.length == 1 && json.keys.contains("?value")) {
+        if (json is Map && json.keys.length == 1 && json.keys.contains("?value")) {
           var val = json["?value"];
           await link.requester.set(ourPath, val);
           response.headers.contentType = ContentType.JSON;
@@ -500,8 +500,11 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           uri.queryParameters.containsKey("value")) {
           await link.requester.set(ourPath, json);
           response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(await getRemoteNodeMap(
-              await link.requester.getRemoteNode(ourPath), uri: uri)));
+          response.writeln(toJSON(
+            await getRemoteNodeMap(
+              await link.requester.getRemoteNode(ourPath),
+              uri: uri
+            )));
           response.close();
           return;
         } else if (uri.queryParameters.containsKey("invoke")) {
@@ -609,18 +612,20 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
       }
 
       Map map;
-      if (json.keys.length == 1 && json.keys.contains("?value")) {
+      if (json is Map && json.keys.length == 1 && json.keys.contains("?value")) {
         node.updateValue(json["?value"]);
         map = getNodeMap(node);
       } else if (uri.queryParameters.containsKey("val") ||
           uri.queryParameters.containsKey("value")) {
         node.updateValue(json);
         map = getNodeMap(node);
-      } else {
+      } else if (json is Map) {
         map = {};
         map.addAll(json);
         map[r"$is"] = "rest";
         node.load(map);
+      } else {
+        map = {};
       }
       response.headers.contentType = ContentType.JSON;
       response.writeln(toJSON(map));
@@ -682,7 +687,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
   return server;
 }
 
-Future<Map> readJSONData(HttpRequest request) async {
+Future<dynamic> readJSONData(HttpRequest request) async {
   var content = await request.transform(UTF8.decoder).join();
   return JSON.decode(content);
 }
