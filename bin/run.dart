@@ -147,6 +147,10 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
         });
 
         ValueUpdate val = await c.future.timeout(const Duration(seconds: 5), onTimeout: () {
+          if (listener != null) {
+            listener.cancel();
+            listener = null;
+          }
           return null;
         });
 
