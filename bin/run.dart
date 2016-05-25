@@ -133,20 +133,40 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
       }
 
       if (n.configs.containsKey(r"$type")) {
-        var val = await link.requester.getNodeValue(ourPath);
-        var value = val.value;
-        if (uri == null || (!uri.queryParameters.containsKey("val") &&
-          !uri.queryParameters.containsKey("value"))) {
-          if (value is ByteData) {
-            value = value.buffer.asUint8List();
+        var c = new Completer<ValueUpdate>();
+        ReqSubscribeListener listener;
+        listener = link.requester.subscribe(ourPath, (ValueUpdate update) {
+          if (!c.isCompleted) {
+            c.complete(update);
           }
 
-          if (value is Uint8List) {
-            value = CryptoUtils.bytesToBase64(value);
+          if (listener != null) {
+            listener.cancel();
+            listener = null;
           }
+        });
+
+        ValueUpdate val = await c.future.timeout(const Duration(seconds: 5), onTimeout: () {
+          return null;
+        });
+
+        if (val != null) {
+          var value = val.value;
+
+          if (uri == null || (!uri.queryParameters.containsKey("val") &&
+            !uri.queryParameters.containsKey("value"))) {
+            if (value is ByteData) {
+              value = value.buffer.asUint8List();
+            }
+
+            if (value is Uint8List) {
+              value = CryptoUtils.bytesToBase64(value);
+            }
+          }
+
+          map["?value"] = value;
+          map["?value_timestamp"] = val.ts;
         }
-        map["?value"] = value;
-        map["?value_timestamp"] = val.ts;
       }
 
       return map;
