@@ -515,9 +515,12 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           await link.requester.set(ourPath, val);
           response.headers.contentType = ContentType.JSON;
           response.writeln(
-              toJSON(await getRemoteNodeMap(
-                  await link.requester.getRemoteNode(ourPath)
-              , uri: uri))
+            toJSON(
+              await getRemoteNodeMap(
+                await link.requester.getRemoteNode(ourPath),
+                uri: uri
+              )
+            )
           );
           response.close();
         } else if (uri.queryParameters.containsKey("val") ||
@@ -610,6 +613,35 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
           response.headers.contentType = ContentType.JSON;
           response.writeln(toJSON(result));
+          response.close();
+          return;
+        } else if (json is Map
+          && json.keys.every(
+            (n) {
+              var k = n.toString();
+
+              return k.startsWith("@") || k == "?value";
+            }
+          )) {
+          for (var key in json.keys) {
+            String p = ourPath;
+
+            if (key != "?value") {
+              p += "/${key}";
+            }
+
+            await link.requester.set(p, json[key]);
+          }
+
+          response.headers.contentType = ContentType.JSON;
+          response.writeln(
+            toJSON(
+              await getRemoteNodeMap(
+                await link.requester.getRemoteNode(ourPath),
+                uri: uri
+              )
+            )
+          );
           response.close();
           return;
         } else {
