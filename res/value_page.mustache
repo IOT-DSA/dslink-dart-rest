@@ -19,14 +19,14 @@
     <h1>{{name}}</h1>
 
     {{#isNotImage}}
-    <h1 class="value"></h1>
+      <h1 class="value"></h1>
     {{/isNotImage}}
 
     {{#isImage}}
-    <img class="value">
+      <img class="value">
     {{/isImage}}
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-rc1/jquery.min.js"></script>
 
     <script>
       var path = "{{path}}";
@@ -44,15 +44,15 @@
         var json = JSON.parse(event.data);
 
         {{#isNotImage}}
-        if (typeof json.value !== "undefined") {
-          $value.text((typeof json.value != "string") ? JSON.stringify(json.value) : json.value);
-        }
+          if (typeof json.value !== "undefined") {
+            $value.text((typeof json.value != "string") ? JSON.stringify(json.value) : json.value);
+          }
         {{/isNotImage}}
 
         {{#isImage}}
-        if (typeof json.value !== "undefined" && json.bin == true) {
-          $value.attr("src", "data:image/jpeg;base64," + json.value);
-        }
+          if (typeof json.value !== "undefined" && json.bin == true) {
+            $value.attr("src", "data:image/jpeg;base64," + json.value);
+          }
         {{/isImage}}
       });
     </script>

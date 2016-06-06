@@ -20,8 +20,12 @@ JsonEncoder jsonUglyEncoder = const JsonEncoder();
 JsonEncoder jsonEncoder = const JsonEncoder.withIndent("  ");
 String toJSON(input) => jsonEncoder.convert(input);
 
-String valuePageHtml = new File("res/value_page.html").readAsStringSync();
-String directoryListPageHtml = new File("res/directory_list.html").readAsStringSync();
+String loadTemplateFile(String name) {
+  return new File("res/${name}.mustache").readAsStringSync();
+}
+
+String valuePageHtml = loadTemplateFile("value_page");
+String directoryListPageHtml = loadTemplateFile("directory_list");
 Function valuePageTemplate = compile(valuePageHtml);
 Function directoryListPageTemplate = compile(directoryListPageHtml);
 
