@@ -12,7 +12,7 @@ import "package:http_multi_server/http_multi_server.dart";
 import "package:mustache4dart/mustache4dart.dart";
 import "package:crypto/crypto.dart";
 
-import "package:mime_type/mime_type.dart";
+import "package:mime/mime.dart";
 
 LinkProvider link;
 
@@ -268,7 +268,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
         }
 
         if (json["@filePath"] is String) {
-          var mt = mime(json["@filePath"]);
+          var mt = lookupMimeType(json["@filePath"]);
           if (mt is String && mt.contains("image")) {
             isImage = true;
           }
@@ -326,14 +326,31 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           }
 
           if (json is ByteData) {
-            response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
-            response.add(json.buffer.asUint8List());
+            var byteList = json.buffer.asUint8List(
+              json.offsetInBytes,
+              json.lengthInBytes
+            );
+            
+            if (request.uri.queryParameters.containsKey("detectType")) {
+              var result = lookupMimeType("binary", headerBytes: byteList);
+              if (result != null) {
+                response.headers.contentType = ContentType.parse(result);
+              } else {
+                response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
+              }
+            } else {
+              response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
+            }
+            
+            response.add(byteList);
           } else if (json is Map || json is List) {
             response.headers.contentType = ContentType.JSON;
             response.write(toJSON(json));
           } else {
             response.write(json);
           }
+          response.close();
+          return;
         } else if (uri.queryParameters.containsKey("watch") ||
           uri.queryParameters.containsKey("subscribe")) {
           if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
@@ -591,34 +608,92 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           });
 
           await future;
-          var result = {};
-
-          result.addAll({
-            "columns": [],
-            "rows": []
-          });
-          for (RequesterInvokeUpdate update in updates) {
-            if (update.error != null) {
-              result.clear();
-              result["error"] = {
-                "message": update.error.msg,
-                "detail": update.error.detail,
-                "path": update.error.path,
-                "phase": update.error.phase
-              };
-              response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-              break;
+          
+          if (request.uri.queryParameters.containsKey("binary")) {
+            for (RequesterInvokeUpdate update in updates) {
+              if (update.error != null) {
+                var result = {};
+                result["error"] = {
+                  "message": update.error.msg,
+                  "detail": update.error.detail,
+                  "path": update.error.path,
+                  "phase": update.error.phase
+                };
+                response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+                response.headers.contentType = ContentType.JSON;
+                response.writeln(toJSON(result));
+                response.close();
+                return;
+              }
+              
+              for (List r in update.rows) {
+                for (var x in r) {
+                  if (x is ByteData) {
+                    response.statusCode = HttpStatus.OK;
+                    
+                    var byteList = x.buffer.asUint8List(
+                      x.offsetInBytes,
+                      x.lengthInBytes
+                    );
+                    if (request.uri.queryParameters.containsKey("detectType")) {
+                      var result = lookupMimeType("binary", headerBytes: byteList);
+                      if (result != null) {
+                        response.headers.contentType = ContentType.parse(result);
+                      } else {
+                        response.headers.contentType = ContentType.BINARY;
+                      }
+                    } else {
+                      response.headers.contentType = ContentType.BINARY;
+                    }
+                    
+                    response.add(x.buffer.asUint8List(
+                      x.offsetInBytes,
+                      x.lengthInBytes
+                    ));
+                    response.close();
+                    return;
+                  }
+                }
+              }
             }
-            result["columns"].addAll(
-              update.columns.map((x) => x.getData()).toList()
-            );
-            result["rows"].addAll(update.rows);
-          }
 
-          response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(result));
-          response.close();
-          return;
+            response.statusCode = HttpStatus.BAD_REQUEST;
+            response.headers.contentType = ContentType.JSON;
+            response.writeln(toJSON({
+              "error": "Not a binary invoke."
+            }));
+            response.close();
+            return;
+          } else {
+            var result = {};
+
+            result.addAll({
+              "columns": [],
+              "rows": []
+            });
+            for (RequesterInvokeUpdate update in updates) {
+              if (update.error != null) {
+                result.clear();
+                result["error"] = {
+                  "message": update.error.msg,
+                  "detail": update.error.detail,
+                  "path": update.error.path,
+                  "phase": update.error.phase
+                };
+                response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+                break;
+              }
+              result["columns"].addAll(
+                  update.columns.map((x) => x.getData()).toList()
+              );
+              result["rows"].addAll(update.rows);
+            }
+
+            response.headers.contentType = ContentType.JSON;
+            response.writeln(toJSON(result));
+            response.close();
+            return;
+          }
         } else if (json is Map
           && json.keys.every(
             (n) {
