@@ -330,7 +330,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
               json.offsetInBytes,
               json.lengthInBytes
             );
-            
+
             if (request.uri.queryParameters.containsKey("detectType")) {
               var result = lookupMimeType("binary", headerBytes: byteList);
               if (result != null) {
@@ -341,7 +341,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
             } else {
               response.headers.contentType = isImage ? ContentType.parse("image/jpeg") : ContentType.BINARY;
             }
-            
+
             response.add(byteList);
           } else if (json is Map || json is List) {
             response.headers.contentType = ContentType.JSON;
@@ -544,6 +544,22 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
             )
           );
           response.close();
+          return;
+        } else if (json is List && uri.path == "/_/values") {
+          var values = {};
+
+          for (String key in json.where((x) => x is String)) {
+            var result = await link.requester.getNodeValue(key).timeout(const Duration(seconds: 5));
+            values[key] = {
+              "timestamp": result.ts,
+              "value": result.value
+            };
+          }
+
+          response.headers.contentType = ContentType.JSON;
+          response.writeln(toJSON(values));
+          response.close();
+          return;
         } else if (uri.queryParameters.containsKey("val") ||
           uri.queryParameters.containsKey("value")) {
           await link.requester.set(ourPath, json);
@@ -608,7 +624,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           });
 
           await future;
-          
+
           if (request.uri.queryParameters.containsKey("binary")) {
             for (RequesterInvokeUpdate update in updates) {
               if (update.error != null) {
@@ -625,12 +641,12 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
                 response.close();
                 return;
               }
-              
+
               for (List r in update.rows) {
                 for (var x in r) {
                   if (x is ByteData) {
                     response.statusCode = HttpStatus.OK;
-                    
+
                     var byteList = x.buffer.asUint8List(
                       x.offsetInBytes,
                       x.lengthInBytes
@@ -645,7 +661,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
                     } else {
                       response.headers.contentType = ContentType.BINARY;
                     }
-                    
+
                     response.add(x.buffer.asUint8List(
                       x.offsetInBytes,
                       x.lengthInBytes
