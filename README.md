@@ -28,6 +28,7 @@ If a password was provided, but not a username, the username is automatically `d
 ### Fetch Multiple Values
 
 **Method**: POST<br/>
+**Path**: `/_/values`
 **Example Request**:
 
 ```json
