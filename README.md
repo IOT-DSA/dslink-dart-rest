@@ -25,6 +25,33 @@ If a password was provided, but not a username, the username is automatically `d
 }
 ```
 
+### Fetch Multiple Values
+
+**Method**: POST<br/>
+**Example Request**:
+
+```json
+[
+  "/downstream/System/CPU_Usage",
+  "/downstream/System/Memory_Usage"
+]
+```
+
+**Example Response**:
+
+```json
+{
+  "/downstream/System/CPU_Usage": {
+    "timestamp": "MY_TS",
+    "value": 15.0
+  },
+  "/downstream/System/Memory_Usage": {
+    "timestamp": "MY_TS",
+    "value": 18.0
+  }
+}
+```
+
 ## Create/Update Node
 
 ### Behaviors
