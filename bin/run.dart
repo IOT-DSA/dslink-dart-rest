@@ -10,7 +10,6 @@ import "package:dslink/utils.dart";
 import "package:http_multi_server/http_multi_server.dart";
 
 import "package:mustache4dart/mustache4dart.dart";
-import "package:crypto/crypto.dart";
 
 import "package:mime/mime.dart";
 
@@ -54,7 +53,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
   handleRequest(HttpRequest request) async {
     if (pwd != null && pwd.isNotEmpty) {
-      String expect = CryptoUtils.bytesToBase64(UTF8.encode("${user}:${pwd}"));
+      String expect = BASE64.encode(UTF8.encode("${user}:${pwd}"));
       var found = request.headers.value("Authorization");
 
       if (found != "Basic ${expect}") {
@@ -142,7 +141,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           }
 
           if (value is Uint8List) {
-            value = CryptoUtils.bytesToBase64(value);
+            value = BASE64.encode(value);
           }
         }
 
@@ -395,11 +394,14 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
             var isBinary = value is ByteData || value is Uint8List;
 
             if (value is ByteData) {
-              value = value.buffer.asUint8List();
+              value = value.buffer.asUint8List(
+                value.offsetInBytes,
+                value.lengthInBytes
+              );
             }
 
             if (value is Uint8List) {
-              value = CryptoUtils.bytesToBase64(value);
+              value = BASE64.encode(value);
             }
 
             var msg = {
@@ -445,7 +447,10 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
         map = map["?value"];
         if (map is ByteData) {
           response.headers.contentType = ContentType.BINARY;
-          response.add(map.buffer.asUint8List());
+          response.add(map.buffer.asUint8List(
+            map.offsetInBytes,
+            map.lengthInBytes
+          ));
         } else if (map is Map || map is List) {
           response.headers.contentType = ContentType.JSON;
           response.write(toJSON(map));
