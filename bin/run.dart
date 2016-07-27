@@ -107,7 +107,51 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
     Path p = new Path(hostPath);
 
-    Future<Map> getRemoteNodeMap(RemoteNode n, {Uri uri}) async {
+    Future applyRemoteValueToMap(String nodePath, Map map, {Uri uri}) async {
+      var c = new Completer<ValueUpdate>();
+      ReqSubscribeListener listener;
+      listener = link.requester.subscribe(nodePath, (ValueUpdate update) {
+        if (!c.isCompleted) {
+          c.complete(update);
+        }
+
+        if (listener != null) {
+          listener.cancel();
+          listener = null;
+        }
+      });
+
+      ValueUpdate val = await c.future.timeout(const Duration(seconds: 5), onTimeout: () {
+        if (listener != null) {
+          listener.cancel();
+          listener = null;
+        }
+        return null;
+      });
+
+      if (val != null) {
+        var value = val.value;
+
+        if (uri == null || (!uri.queryParameters.containsKey("val") &&
+          !uri.queryParameters.containsKey("value"))) {
+          if (value is ByteData) {
+            value = value.buffer.asUint8List(
+              value.offsetInBytes,
+              value.lengthInBytes
+            );
+          }
+
+          if (value is Uint8List) {
+            value = CryptoUtils.bytesToBase64(value);
+          }
+        }
+
+        map["?value"] = value;
+        map["?value_timestamp"] = val.ts;
+      }
+    }
+
+    Future<Map> getRemoteNodeMap(RemoteNode n, {Uri uri, bool includeChildValues: false}) async {
       if (n == null) {
         return {
           "error": "No Such Node"
@@ -129,52 +173,25 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
         var x = new Path(child.remotePath);
         var trp = (ourPath == "/" ? "" : ourPath) + "/" + key;
-        map[key] = {
+        var m = {
           "?name": x.name,
           "?path": trp,
-          "?url": request.requestedUri.replace(path: Uri.encodeFull(trp)).toString()
-        }..addAll(child.getSimpleMap());
+          "?url": request.requestedUri.replace(
+            path: Uri.encodeFull(trp)
+          ).toString()
+        };
+
+        m.addAll(child.getSimpleMap());
+
+        if (m[r"$type"] is String && includeChildValues == true) {
+          await applyRemoteValueToMap(trp, m);
+        }
+
+        map[key] = m;
       }
 
       if (n.configs.containsKey(r"$type")) {
-        var c = new Completer<ValueUpdate>();
-        ReqSubscribeListener listener;
-        listener = link.requester.subscribe(ourPath, (ValueUpdate update) {
-          if (!c.isCompleted) {
-            c.complete(update);
-          }
-
-          if (listener != null) {
-            listener.cancel();
-            listener = null;
-          }
-        });
-
-        ValueUpdate val = await c.future.timeout(const Duration(seconds: 5), onTimeout: () {
-          if (listener != null) {
-            listener.cancel();
-            listener = null;
-          }
-          return null;
-        });
-
-        if (val != null) {
-          var value = val.value;
-
-          if (uri == null || (!uri.queryParameters.containsKey("val") &&
-            !uri.queryParameters.containsKey("value"))) {
-            if (value is ByteData) {
-              value = value.buffer.asUint8List();
-            }
-
-            if (value is Uint8List) {
-              value = CryptoUtils.bytesToBase64(value);
-            }
-          }
-
-          map["?value"] = value;
-          map["?value_timestamp"] = val.ts;
-        }
+        await applyRemoteValueToMap(ourPath, map, uri: uri);
       }
 
       return map;
@@ -259,7 +276,11 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           return;
         }
 
-        var json = await getRemoteNodeMap(node, uri: uri);
+        var json = await getRemoteNodeMap(
+          node,
+          uri: uri,
+          includeChildValues: request.uri.queryParameters.containsKey("values")
+        );
 
         var isImage = false;
 
