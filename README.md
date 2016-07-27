@@ -27,6 +27,7 @@ If a password was provided, but not a username, the username is automatically `d
 
 ### Fetch Multiple Values
 
+**Restrictions**: Client Mode Only<br/>
 **Method**: POST<br/>
 **Path**: `/_/values`<br/>
 **Example Request**:
