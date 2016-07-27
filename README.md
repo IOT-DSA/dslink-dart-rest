@@ -53,9 +53,9 @@ If a password was provided, but not a username, the username is automatically `d
 }
 ```
 
-## Create/Update Node
+### Create/Update Node
 
-### Behaviors
+#### Behaviors
 
 - If the node already exists, the provided data is merged into the existing node.
 - When creating a new node, any parent node that does not exist is created.
@@ -82,7 +82,7 @@ If a password was provided, but not a username, the username is automatically `d
 }
 ```
 
-## Overwrite Node
+### Overwrite Node
 
 **Method**: POST<br/>
 **Example Request**:
@@ -106,7 +106,7 @@ If a password was provided, but not a username, the username is automatically `d
 }
 ```
 
-## Delete Node
+### Delete Node
 
 **Method**: DELETE<br/>
 **Example Response**:
@@ -121,7 +121,7 @@ If a password was provided, but not a username, the username is automatically `d
 }
 ```
 
-## WebHook
+### WebHook
 
 You can use a node path as a WebHook for services that use this kind of pattern.
 
