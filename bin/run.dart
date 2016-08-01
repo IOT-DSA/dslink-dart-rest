@@ -866,7 +866,16 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
 Future<dynamic> readJSONData(HttpRequest request) async {
   var content = await request.transform(UTF8.decoder).join();
-  return JSON.decode(content);
+
+  try {
+    return JSON.decode(content);
+  } catch (e) {
+    try {
+      return Uri.decodeComponent(content);
+    } catch (x) {
+      rethrow;
+    }
+  }
 }
 
 main(List<String> args) async {
