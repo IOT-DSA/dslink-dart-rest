@@ -8,12 +8,10 @@ import "package:dslink/nodes.dart";
 import "package:dslink/utils.dart";
 
 import "package:http_multi_server/http_multi_server.dart";
-
 import "package:mustache4dart/mustache4dart.dart";
-
 import "package:mime/mime.dart";
 
-LinkProvider link;
+import 'package:dslink_rest/rest.dart';
 
 JsonEncoder jsonUglyEncoder = const JsonEncoder();
 JsonEncoder jsonEncoder = const JsonEncoder.withIndent("  ");
@@ -32,24 +30,6 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
   if (user == null || user.isEmpty) {
     user = "dsa";
   }
-
-  List<HttpServer> servers = <HttpServer>[];
-  InternetAddress ipv4 = local ?
-    InternetAddress.LOOPBACK_IP_V4 :
-    InternetAddress.ANY_IP_V4;
-  InternetAddress ipv6 = local ?
-    InternetAddress.LOOPBACK_IP_V6 :
-    InternetAddress.ANY_IP_V6;
-
-  try {
-    servers.add(await HttpServer.bind(ipv4, port));
-  } catch (e) {}
-
-  try {
-    servers.add(await HttpServer.bind(ipv6, port));
-  } catch (e) {}
-
-  HttpMultiServer server = new HttpMultiServer(servers);
 
   handleRequest(HttpRequest request) async {
     if (pwd != null && pwd.isNotEmpty) {
@@ -848,20 +828,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
     response.close();
   }
 
-  server.listen((request) async {
-    try {
-      await handleRequest(request);
-    } catch (e) {
-      try {
-        request.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-      } catch (e) {}
-      request.response.writeln("Internal Server Error:");
-      request.response.writeln(e);
-      request.response.close();
-    }
-  });
 
-  return server;
 }
 
 Future<dynamic> readJSONData(HttpRequest request) async {
@@ -878,297 +845,23 @@ Future<dynamic> readJSONData(HttpRequest request) async {
   }
 }
 
-main(List<String> args) async {
+Future<Null> main(List<String> args) async {
+  LinkProvider link;
   link = new LinkProvider(args, "REST-", profiles: {
-    "addServer": (String path) => new SimpleActionNode(path,
-      (Map<String, dynamic> params) async {
-      int port = params["port"] is String  ?
-        int.parse(params["port"]) :
-        params["port"];
-      bool local = params["local"];
-      String type = params["type"];
-      String pwd = params["password"];
-      String user = params["username"];
-      if (local == null) local = false;
-
-      try {
-        var server = await ServerSocket.bind(InternetAddress.ANY_IP_V4, port);
-        await server.close();
-      } catch (e) {
-        return {
-          "message": "Failed to bind to port: ${e}"
-        };
-      }
-
-      link.addNode("/${params["name"]}", {
-        r"$is": "server",
-        r"$server_port": port,
-        r"$server_local": local,
-        r"$server_type": type,
-        r"$$server_password": pwd,
-        r"$$server_username": user,
-        "Remove": {
-          r"$is": "remove",
-          r"$invokable": "write"
-        }
-      });
-      changed = true;
-      return {
-        "message": "Success!"
-      };
-    }),
-    "server": (String path) {
-      return new ServerNode(path);
+      AddServer.isType: (String path) => new AddServer(path, link),
+      ServerNode.isType: (String path) => new ServerNode(path, link),
+      CreateValue.isType: (String path) => new CreateValue(path, link),
+      CreateNode.isType: (String path) => new CreateNode(path, link),
+      RemoveNode.isType: (String path) => new RemoveNode(path, link),
+      RestNode.isType: (String path) => new RestNode(path),
+    }, defaultNodes: {
+      AddServer.pathName: AddServer.def()
     },
-    "rest": (String path) {
-      return new RestNode(path);
-    },
-    "create": (String path) {
-      return new SimpleActionNode(path, (Map<String, dynamic> params) {
-        var name = params["name"];
-
-        var parent = new Path(path).parent;
-        link.addNode("${parent.path}/${name}", {
-          r"$is": "rest"
-        });
-        changed = true;
-      });
-    },
-    "createMetric": (String path) {
-      return new SimpleActionNode(path, (Map<String, dynamic> params) {
-        var name = params["name"];
-        var editor = params["editor"];
-        var type = params["type"];
-
-        var parent = new Path(path).parent;
-        var node = link.addNode("${parent.path}/${name}", {
-          r"$is": "rest",
-          r"$type": type,
-          r"$writable": "write"
-        });
-
-        if (editor != null && editor.isNotEmpty) {
-          node.configs[r"$editor"] = editor;
-        }
-
-        changed = true;
-      });
-    },
-    "remove": (String path) => new DeleteActionNode.forParent(
-      path,
-      link.provider as MutableNodeProvider,
-      onDelete: link.save
-    )
-  }, autoInitialize: false, isRequester: true, isResponder: true);
-
-  var nodes = {
-    "addServer": {
-      r"$name": "Add Server",
-      r"$invokable": "write",
-      r"$params": [
-        {
-          "name": "name",
-          "type": "string",
-          "placeholder": "MyServer"
-        },
-        {
-          "name": "local",
-          "type": "bool",
-          "description": "Bind to Local Interface",
-          "default": false
-        },
-        {
-          "name": "port",
-          "type": "int",
-          "default": 8020
-        },
-        {
-          "name": "type",
-          "type": "enum[Data Host,Data Client]",
-          "default": "Data Host",
-          "description": "Data Type"
-        },
-        {
-          "name": "username",
-          "type": "string",
-          "placeholder": "Optional Username"
-        },
-        {
-          "name": "password",
-          "type": "string",
-          "editor": "password",
-          "placeholder": "Optional Password"
-        }
-      ],
-      r"$result": "values",
-      r"$columns": [
-        {
-          "name": "message",
-          "type": "string"
-        }
-      ],
-      r"$is": "addServer"
-    }
-  };
+    autoInitialize: false, isRequester: true, isResponder: true);
 
   link.init();
+  await link.connect();
 
-  for (var k in nodes.keys) {
-    link.addNode("/${k}", nodes[k]);
-  }
-
-  link.connect();
-
-  timer = Scheduler.every(Interval.ONE_SECOND, () async {
-    if (changed) {
-      changed = false;
-      await link.saveAsync();
-    }
-  });
 }
 
-bool changed = false;
-Timer timer;
 
-class RestNode extends SimpleNode {
-  RestNode(String path) : super(path);
-
-  @override
-  onCreated() {
-    link.addNode("${path}/createNode", {
-      r"$name": "Create Node",
-      r"$is": "create",
-      r"$invokable": "write",
-      r"$result": "values",
-      r"$params": [
-        {
-          "name": "name",
-          "type": "string"
-        }
-      ]
-    });
-
-    link.addNode("${path}/createValue", CREATE_VALUE);
-
-    link.addNode("${path}/remove", {
-      r"$name": "Remove Node",
-      r"$is": "remove",
-      r"$invokable": "write"
-    });
-  }
-
-  @override
-  onSetValue(Object val) {
-    if (configs[r"$type"] == "map" && val is String) {
-      try {
-        var json = JSON.decode(val);
-        updateValue(json);
-        return true;
-      } catch (e) {
-        return super.onSetValue(val);
-      }
-    } else {
-      return super.onSetValue(val);
-    }
-  }
-
-  @override
-  updateValue(Object update, {bool force: false}) {
-    super.updateValue(update, force: force);
-    changed = true;
-  }
-
-  @override
-  onRemoving() {
-    changed = true;
-  }
-}
-
-final Map<String, dynamic> CREATE_VALUE = {
-  r"$name": "Create Value",
-  r"$is": "createMetric",
-  r"$invokable": "write",
-  r"$result": "values",
-  r"$params": [
-    {
-      "name": "name",
-      "type": "string"
-    },
-    {
-      "name": "type",
-      "type": "enum",
-      "editor": buildEnumType([
-        "string",
-        "number",
-        "bool",
-        "color",
-        "gradient",
-        "fill",
-        "array",
-        "map"
-      ])
-    },
-    {
-      "name": "editor",
-      "type": "enum",
-      "editor": buildEnumType([
-        "none",
-        "textarea",
-        "password",
-        "daterange",
-        "date"
-      ]),
-      "default": "none"
-    }
-  ],
-  r"$columns": []
-};
-
-class ServerNode extends SimpleNode {
-  HttpServer server;
-
-  ServerNode(String path) : super(path);
-
-  @override
-  onCreated() async {
-    var port = configs[r"$server_port"];
-    var local = configs[r"$server_local"];
-    var type = configs[r"$server_type"];
-    var user = configs[r"$$server_username"];
-    var pwd = configs[r"$$server_password"];
-    if (local == null) local = false;
-    if (type == null) type = "Data Host";
-
-    configs[r"$server_local"] = local;
-    configs[r"$server_type"] = type;
-
-    server = await launchServer(local, port, pwd, user, this);
-
-    if (type == "Data Host") {
-      link.addNode("${path}/createNode", {
-        r"$name": "Create Node",
-        r"$is": "create",
-        r"$invokable": "write",
-        r"$result": "values",
-        r"$params": [
-          {
-            "name": "name",
-            "type": "string"
-          }
-        ]
-      });
-
-      link.addNode("${path}/createValue", CREATE_VALUE);
-    }
-  }
-
-  bool get isDataHost => configs[r"$server_type"] == "Data Host";
-
-  @override
-  onRemoving() async {
-    if (server != null) {
-      await server.close(force: true);
-      server = null;
-    }
-  }
-}
