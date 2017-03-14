@@ -36,7 +36,7 @@ class AddServer extends SimpleNode {
           {"name": _port, "type": "number", 'editor': 'int', "default": 8020},
           {
             "name": _type,
-            "type": "enum[Data Host,Data Client]",
+            "type": "enum[${ServerNode.DataHost},${ServerNode.DataClient}]",
             "default": "Data Host",
             "description": "Data Type"
           },
@@ -75,6 +75,8 @@ class AddServer extends SimpleNode {
     if (!ret[_success]) {
       return ret..[_message] = "Unable to bind to port";
     }
+
+    if (user == null || user.isEmpty) user = 'dsa';
 
     provider.addNode(
         '/${params[_name]}', ServerNode.def(port, local, type, user, pwd));
@@ -118,7 +120,7 @@ class EditServer extends SimpleNode {
           },
           {
             "name": _type,
-            "type": "enum[Data Host,Data Client]",
+            "type": "enum[${ServerNode.DataHost},${ServerNode.DataClient}]",
             "default": type,
             "description": "Data Type"
           },
@@ -179,11 +181,16 @@ class EditServer extends SimpleNode {
 class ServerNode extends SimpleNode {
   static const String isType = 'server';
 
+  /// ServerNode acts as a Data Host
+  static const String DataHost = 'Data Host';
+  /// ServerNode acts as a Data Client
+  static const String DataClient = 'Data Client';
+
   static const String _port = r'$server_port';
   static const String _local = r'$server_local';
   static const String _type = r'$server_type';
-  static const String _user = r'$$user';
-  static const String _pass = r'$$password';
+  static const String _user = r'$$server_username';
+  static const String _pass = r'$$server_password';
 
   static Map<String, dynamic> def(
       int port, bool local, String type, String user, String pass) {
@@ -213,11 +220,11 @@ class ServerNode extends SimpleNode {
 
   @override
   onCreated() async {
-    var port = configs[r"$server_port"];
-    var local = configs[r"$server_local"];
-    var type = configs[r"$server_type"];
-    var user = configs[r"$$server_username"];
-    var pwd = configs[r"$$server_password"];
+    var port = configs[_port];
+    var local = configs[_local];
+    var type = configs[_type];
+    var user = configs[_user];
+    var pwd = configs[_pass];
 
     if (type == 'Data Host') {
       isDataHost = true;
@@ -225,12 +232,12 @@ class ServerNode extends SimpleNode {
 
     if (local == null) {
       local = false;
-      configs[r"$server_local"] = local;
+      configs[_local] = local;
     }
 
     if (type == null) {
       type = "Data Host";
-      configs[r"$server_type"] = type;
+      configs[_type] = type;
     }
 
     try {
@@ -239,7 +246,7 @@ class ServerNode extends SimpleNode {
       // TODO: Handle failed to start server
     }
 
-    if (type == "Data Host") {
+    if (type == DataHost) {
       isDataHost = true;
       var nd = provider.getNode('$path/${CreateNode.pathName}');
       if (nd == null) {
@@ -289,7 +296,7 @@ class ServerNode extends SimpleNode {
       return e.toString();
     }
 
-    if (type == 'Data Host') isDataHost = true;
+    if (type == DataHost) isDataHost = true;
     return null;
 
   }

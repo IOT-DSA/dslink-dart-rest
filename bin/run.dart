@@ -26,26 +26,11 @@ String directoryListPageHtml = loadTemplateFile("directory_list");
 Function valuePageTemplate = compile(valuePageHtml);
 Function directoryListPageTemplate = compile(directoryListPageHtml);
 
+LinkProvider link;
+
 launchServer(bool local, int port, String pwd, String user, ServerNode serverNode) async {
-  if (user == null || user.isEmpty) {
-    user = "dsa";
-  }
 
   handleRequest(HttpRequest request) async {
-    if (pwd != null && pwd.isNotEmpty) {
-      String expect = BASE64.encode(UTF8.encode("${user}:${pwd}"));
-      var found = request.headers.value("Authorization");
-
-      if (found != "Basic ${expect}") {
-        request.response.headers.set(
-          "WWW-Authenticate", 'Basic realm="DSA Rest Link"'
-        );
-        request.response.statusCode = 401;
-        request.response.close();
-        return;
-      }
-    }
-
     HttpResponse response = request.response;
 
     Uri uri = request.uri;

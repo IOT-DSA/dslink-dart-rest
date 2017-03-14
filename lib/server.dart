@@ -21,7 +21,6 @@ class Server {
 
   static Future<Server> bind(
       bool local, int port, String user, String pass) async {
-
     if (port == null || port <= 0 || port > 65535) {
       throw new SocketException('Invalid port number', port: port);
     }
@@ -49,18 +48,22 @@ class Server {
     }
 
     if (failed >= 2) {
-      throw new SocketException(
-          'Unable to start IPv4 or IPv6 server', port: port);
+      throw new SocketException('Unable to start IPv4 or IPv6 server',
+          port: port);
     }
 
     var s = new HttpMultiServer(svs);
-    var authStr = BASE64.encode(UTF8.encode('$user:$pass'));
+    String authStr;
+
+    if (pass != null && pass.isNotEmpty)
+      authStr = BASE64.encode(UTF8.encode('$user:$pass'));
 
     return new Server._(s, local, port, authStr);
   }
 
   HttpMultiServer _serv;
   String _authStr;
+  bool get _authEnabled => _authStr != null;
 
   bool get isLocal => _local;
   bool _local;
@@ -77,15 +80,34 @@ class Server {
   }
 
   void updateAuth(String user, String pass) {
-    _authStr = BASE64.encode(UTF8.encode('$user:$pass'));
+    if (pass == null || pass.isEmpty)
+      _authStr = null;
+    else
+      _authStr = BASE64.encode(UTF8.encode('$user:$pass'));
+  }
+
+  bool _checkAuth(HttpRequest req) {
+    var authHead = req.headers.value(HttpHeaders.AUTHORIZATION);
+
+    if (authHead != 'Basic ${_authStr}') {
+      var resp = req.response;
+      resp..headers
+          .set(HttpHeaders.WWW_AUTHENTICATE, 'Basic realm="DSA Rest Link"')
+        ..statusCode = HttpStatus.UNAUTHORIZED
+        ..close();
+      return false;
+    }
+
+    return true;
   }
 
   void _handleRequests(HttpRequest req) {
-
+    if (_authEnabled) {
+      if (!_checkAuth(req)) return;
+    }
   }
 
   void _listenErr(error) {
     logger.severe('Error listening for requests', error);
   }
-
 }
