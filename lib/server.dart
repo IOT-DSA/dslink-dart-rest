@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:dslink/utils.dart' show logger;
 import "package:http_multi_server/http_multi_server.dart";
 
+import 'node_manager.dart';
+
 class Server {
   static Future<bool> checkPort(int port) async {
     if (port == null || port <= 0 || port > 65535) return false;
@@ -20,7 +22,7 @@ class Server {
   }
 
   static Future<Server> bind(
-      bool local, int port, String user, String pass) async {
+      bool local, int port, String user, String pass, NodeManager man) async {
     if (port == null || port <= 0 || port > 65535) {
       throw new SocketException('Invalid port number', port: port);
     }
@@ -58,10 +60,11 @@ class Server {
     if (pass != null && pass.isNotEmpty)
       authStr = BASE64.encode(UTF8.encode('$user:$pass'));
 
-    return new Server._(s, local, port, authStr);
+    return new Server._(s, local, port, authStr, man);
   }
 
   HttpMultiServer _serv;
+  NodeManager _manager;
   String _authStr;
   bool get _authEnabled => _authStr != null;
 
@@ -71,7 +74,7 @@ class Server {
   int get port => _port;
   int _port;
 
-  Server._(this._serv, this._local, this._port, this._authStr) {
+  Server._(this._serv, this._local, this._port, this._authStr, this._manager) {
     _serv.listen(_handleRequests, onError: _listenErr);
   }
 
@@ -105,9 +108,89 @@ class Server {
     if (_authEnabled) {
       if (!_checkAuth(req)) return;
     }
+
+    var sr = new ServerRequest(req);
+
+    if (sr.path == '/favicon.ico') {
+      _notFound(sr);
+      return;
+    }
+
+    switch (sr.method) {
+      case 'OPTIONS':
+        _options(sr);
+        return;
+      case 'GET':
+        _get(sr);
+        return;
+    }
   }
 
   void _listenErr(error) {
     logger.severe('Error listening for requests', error);
+  }
+
+  // Add Headers to prevent caching responses.
+  void _addNoCacheHeaders(ServerRequest sr) {
+    sr.response.headers
+      ..set(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+      ..set(HttpHeaders.PRAGMA, 'no-cache')
+      ..set(HttpHeaders.EXPIRES, '0');
+  }
+
+  // 404 Page not found
+  void _notFound(ServerRequest sr) {
+    _addNoCacheHeaders(sr);
+    sr.response
+      ..statusCode = HttpStatus.NOT_FOUND
+      ..headers.contentType = ContentType.JSON
+      ..writeln('{"error":"not found"}')
+      ..close();
+  }
+
+  void _sendJsonError(ServerRequest sr, ServerResponse resp) {
+    int sc;
+    switch (resp.status) {
+      case ResponseStatus.badRequest:
+        sc = HttpStatus.BAD_REQUEST;
+        break;
+      case ResponseStatus.notFound:
+        sc = HttpStatus.NOT_FOUND;
+        break;
+      case ResponseStatus.ok:
+        sc = HttpStatus.OK;
+        break;
+      case ResponseStatus.error:
+      default:
+        sc = HttpStatus.INTERNAL_SERVER_ERROR;
+        break;
+    }
+
+    var body = JSON.encode(resp.body);
+    _addNoCacheHeaders(sr);
+    sr.response
+        ..statusCode = sc
+        ..headers.contentType = ContentType.JSON
+        ..writeln(body)
+        ..close();
+  }
+
+  // Respond to Options requests.
+  void _options(ServerRequest sr) {
+    sr.response.headers
+      ..set('Access-Control-Allow-Origin', '*')
+      ..set('Access-Control-Allow-Methods', 'GET, PUT, POST, PATCH, DELETE');
+    sr.response
+      ..writeln()
+      ..close();
+  }
+
+  Future<Null> _get(ServerRequest sr) async {
+    var resp = await _manager.getRequest(sr.path);
+
+    if (resp.status != ResponseStatus.ok) {
+      _sendJsonError(sr, resp);
+      return;
+    }
   }
 }

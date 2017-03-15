@@ -1,4 +1,6 @@
 import 'dart:async';
+import "dart:typed_data";
+import 'dart:convert' show BASE64;
 
 import 'package:dslink/dslink.dart';
 import 'package:dslink/utils.dart' show logger;
@@ -7,6 +9,7 @@ import 'create_value.dart';
 import 'remove.dart';
 
 import '../server.dart';
+import '../node_manager.dart';
 
 class AddServer extends SimpleNode {
   static const String isType = 'addServer';
@@ -101,7 +104,8 @@ class EditServer extends SimpleNode {
   static const String _message = 'message';
 
   static Map<String, dynamic> def(
-      bool local, int port, String type, String user) => {
+          bool local, int port, String type, String user) =>
+      {
         r'$is': isType,
         r'$name': 'Edit Server',
         r'$invokable': 'write',
@@ -112,12 +116,7 @@ class EditServer extends SimpleNode {
             "description": "Bind to Local Interface",
             "default": local
           },
-          {
-            "name": _port,
-            "type": "number",
-            'editor': 'int',
-            "default": port
-          },
+          {"name": _port, "type": "number", 'editor': 'int', "default": port},
           {
             "name": _type,
             "type": "enum[${ServerNode.DataHost},${ServerNode.DataClient}]",
@@ -167,22 +166,25 @@ class EditServer extends SimpleNode {
     var err = await (parent as ServerNode).updateConfig(port, loc, ty, u, p);
 
     if (err == null) {
-      ret..[_success] = true
-          ..[_message] = 'Success!';
+      ret
+        ..[_success] = true
+        ..[_message] = 'Success!';
     } else {
-      ret..[_success] = false
-          ..[_message] = 'Unable to update config: $err';
+      ret
+        ..[_success] = false
+        ..[_message] = 'Unable to update config: $err';
     }
 
     return ret;
   }
 }
 
-class ServerNode extends SimpleNode {
+class ServerNode extends SimpleNode implements NodeManager {
   static const String isType = 'server';
 
   /// ServerNode acts as a Data Host
   static const String DataHost = 'Data Host';
+
   /// ServerNode acts as a Data Client
   static const String DataClient = 'Data Client';
 
@@ -191,6 +193,8 @@ class ServerNode extends SimpleNode {
   static const String _type = r'$server_type';
   static const String _user = r'$$server_username';
   static const String _pass = r'$$server_password';
+
+  static const Duration _timeout = const Duration(seconds: 5);
 
   static Map<String, dynamic> def(
       int port, bool local, String type, String user, String pass) {
@@ -241,7 +245,7 @@ class ServerNode extends SimpleNode {
     }
 
     try {
-      server = await Server.bind(local, port, user, pwd);
+      server = await Server.bind(local, port, user, pwd, this);
     } catch (e) {
       // TODO: Handle failed to start server
     }
@@ -269,7 +273,6 @@ class ServerNode extends SimpleNode {
 
   Future<String> updateConfig(
       int port, bool local, String type, String user, String pass) async {
-
     if (pass == null || pass.isEmpty) {
       pass = getConfig(_pass);
     }
@@ -291,13 +294,140 @@ class ServerNode extends SimpleNode {
     }
 
     try {
-      server = await Server.bind(local, port, user, pass);
+      server = await Server.bind(local, port, user, pass, this);
     } catch (e) {
       return e.toString();
     }
 
     if (type == DataHost) isDataHost = true;
     return null;
+  }
+
+  Future<ServerResponse> getRequest(String path) async {
+    if (isDataHost) {
+      return _getClient(path);
+    }
+
+    var hostPath = "${this.path}$path";
+    if (hostPath != "/" && hostPath.endsWith("/")) {
+      hostPath = hostPath.substring(0, hostPath.length - 1);
+    }
+    return _getData(hostPath);
+  }
+
+  Future<ServerResponse> _getClient(String pt) async {
+    var p = new Path(pt);
+    if (!p.valid) {
+      return new ServerResponse(
+          {'error': 'Invalid Path: $pt'}, ResponseStatus.badRequest);
+    }
+
+    RemoteNode nd;
+    var requester = link.requester;
+    try {
+      nd = await requester.getRemoteNode(p.path).timeout(_timeout);
+    } catch (e) {
+      return new ServerResponse(
+          {'error': 'Server error $e'}, ResponseStatus.error);
+    }
+
+    if (nd == null) {
+      return new ServerResponse(
+          {'error': 'Node not found'}, ResponseStatus.notFound);
+    }
+  }
+
+  Future<ServerResponse> _getData(String pt) async {
+    // TODO: This
+  }
+
+  Future<Map> _getRemoteNodeMap(RemoteNode n, ServerRequest req) async {
+    if (n == null) {
+      return {'error': 'No Such Node'};
+    }
+
+    var map = {
+      '?name': n.name,
+      '?path': req.path,
+      '?url': req.request.requestedUri.toString()
+    };
+
+    map..addAll(n.configs)..addAll(n.attributes);
+
+    if (map[r'$type'] is String) { // Has a type set, regardles of the value
+      var vals = await _getRemoteValues(req.path, req);
+      if (vals != null) map.addAll(vals);
+    }
+
+    for (String key in n.children.keys) {
+      var ch = n.children[key] as RemoteNode;
+
+      var trp = (req.path == '/' ? "" : req.path) + '/$key';
+      var m = {
+        '?name': ch.name,
+        '?path': trp,
+        '?url': req.request.requestedUri
+            .replace(path: Uri.encodeFull(trp))
+            .toString()
+      };
+
+      m.addAll(ch.getSimpleMap());
+
+      if (req.childValues && m[r'$type'] is String) {
+        var vals = await _getRemoteValues(trp, req);
+        if (vals != null) m.addAll(vals);
+      }
+
+      map[key] = m;
+    }
+
+    return map;
+  }
+
+  Future<Map> _getRemoteValues(String path, ServerRequest req) async {
+    var c = new Completer<ValueUpdate>();
+    ReqSubscribeListener listener;
+    listener = link.requester.subscribe(path, (ValueUpdate up) {
+      if (!c.isCompleted) {
+        c.complete(up);
+      }
+
+      if (listener != null) {
+        listener.cancel();
+        listener = null;
+      }
+    });
+
+    var val = await c.future.timeout(_timeout, onTimeout: () {
+      if (listener != null) {
+        listener.cancel();
+        listener = null;
+      }
+      return null;
+    });
+
+    if (val == null) return null;
+
+    var value = val.value;
+    if (req.base64Value) {
+      if (value is ByteData) {
+        value = value.buffer.asUint8List(
+          value.offsetInBytes,
+          value.lengthInBytes
+        );
+      }
+
+      if (value is Uint8List) {
+        value = BASE64.encode(value);
+      }
+    }
+
+    var map = {
+      '?value': value,
+      '?value_timestamp': val.ts
+    };
+
+    return map;
 
   }
 }

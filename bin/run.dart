@@ -37,128 +37,17 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
     String method = request.method;
     String ourPath = Uri.decodeComponent(uri.normalizePath().path);
 
-    if (ourPath != "/" && ourPath.endsWith("/")) {
-      ourPath = ourPath.substring(0, ourPath.length - 1);
-    }
-
+    // TODO in NodeManager
     String hostPath = "${serverNode.path}${ourPath}";
-    if (hostPath != "/" && hostPath.endsWith("/")) {
-      hostPath = hostPath.substring(0, hostPath.length - 1);
-    }
-
-    response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-    response.headers.set("Pragma", "no-cache");
-    response.headers.set("Expires", "0");
-
-    if (method == "OPTIONS") {
-      response.headers.set("Access-Control-Allow-Origin", "*");
-      response.headers.set("Access-Control-Allow-Methods", "GET, PUT, POST, PATCH, DELETE");
-      response.writeln();
-      response.close();
-      return;
-    }
-
-    if (ourPath == "/favicon.ico") {
-      response.statusCode = HttpStatus.NOT_FOUND;
-      response.writeln("Not Found.");
-      response.close();
-      return;
-    }
-
-    if (ourPath == "/index.html") {
-      ourPath = "/.html";
-    }
 
     Path p = new Path(hostPath);
 
     Future applyRemoteValueToMap(String nodePath, Map map, {Uri uri}) async {
-      var c = new Completer<ValueUpdate>();
-      ReqSubscribeListener listener;
-      listener = link.requester.subscribe(nodePath, (ValueUpdate update) {
-        if (!c.isCompleted) {
-          c.complete(update);
-        }
 
-        if (listener != null) {
-          listener.cancel();
-          listener = null;
-        }
-      });
-
-      ValueUpdate val = await c.future.timeout(const Duration(seconds: 5), onTimeout: () {
-        if (listener != null) {
-          listener.cancel();
-          listener = null;
-        }
-        return null;
-      });
-
-      if (val != null) {
-        var value = val.value;
-
-        if (uri == null || (!uri.queryParameters.containsKey("val") &&
-          !uri.queryParameters.containsKey("value"))) {
-          if (value is ByteData) {
-            value = value.buffer.asUint8List(
-              value.offsetInBytes,
-              value.lengthInBytes
-            );
-          }
-
-          if (value is Uint8List) {
-            value = BASE64.encode(value);
-          }
-        }
-
-        map["?value"] = value;
-        map["?value_timestamp"] = val.ts;
-      }
     }
 
     Future<Map> getRemoteNodeMap(RemoteNode n, {Uri uri, bool includeChildValues: false}) async {
-      if (n == null) {
-        return {
-          "error": "No Such Node"
-        };
-      }
 
-      var p = new Path(n.remotePath);
-      var map = {
-        "?name": p.name,
-        "?path": ourPath,
-        "?url": request.requestedUri.toString()
-      };
-
-      map.addAll(n.configs);
-      map.addAll(n.attributes);
-
-      for (String key in n.children.keys) {
-        RemoteNode child = n.children[key];
-
-        var x = new Path(child.remotePath);
-        var trp = (ourPath == "/" ? "" : ourPath) + "/" + key;
-        var m = {
-          "?name": x.name,
-          "?path": trp,
-          "?url": request.requestedUri.replace(
-            path: Uri.encodeFull(trp)
-          ).toString()
-        };
-
-        m.addAll(child.getSimpleMap());
-
-        if (m[r"$type"] is String && includeChildValues == true) {
-          await applyRemoteValueToMap(trp, m);
-        }
-
-        map[key] = m;
-      }
-
-      if (n.configs.containsKey(r"$type")) {
-        await applyRemoteValueToMap(ourPath, map, uri: uri);
-      }
-
-      return map;
     }
 
     Map getNodeMap(SimpleNode n, {Uri uri}) {
@@ -213,32 +102,11 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
     if (method == "GET") {
       if (!serverNode.isDataHost) {
         var isHtml = false;
-        if (ourPath.endsWith(".html")) {
-          ourPath = ourPath.substring(0, ourPath.length - 5);
-          isHtml = true;
-        }
 
         var p = new Path(ourPath);
-        if (!p.valid) {
-          response.statusCode = HttpStatus.BAD_REQUEST;
-          response.writeln(toJSON({
-            "error": "Invalid Path: ${p.path}"
-          }));
-          response.close();
-          return;
-        }
 
         var node = await link.requester.getRemoteNode(p.path)
           .timeout(const Duration(seconds: 5), onTimeout: () => null);
-
-        if (node == null) {
-          response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON({
-            "error": "Node not found."
-          }));
-          response.close();
-          return;
-        }
 
         var json = await getRemoteNodeMap(
           node,
