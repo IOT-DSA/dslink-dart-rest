@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:async';
+import "package:mime/mime.dart";
 
 abstract class NodeManager {
   bool get isDataHost;
 
-  Future<ServerResponse> getRequest(String path);
+  Future<ServerResponse> getRequest(ServerRequest sr);
+  Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket);
 }
 
 class ServerRequest {
@@ -14,9 +16,13 @@ class ServerRequest {
   String get method => request.method;
   bool isHtml = false;
   bool get childValues => request.uri.queryParameters.containsKey('values');
-  bool get base64Value =>
+  bool get subscribe => request.uri.queryParameters.containsKey('watch') ||
+      request.uri.queryParameters.containsKey('subscribe');
+  bool get detectType => request.uri.queryParameters.containsKey('detectType');
+  bool get returnValue =>
       request.uri.queryParameters.containsKey('value') ||
       request.uri.queryParameters.containsKey('val');
+
 
   ServerRequest(this.request) {
     path = Uri.decodeComponent(request.uri.normalizePath().path);
@@ -33,11 +39,23 @@ class ServerRequest {
       path = path.substring(0, path.length - 5);
     }
   }
+
 }
 
 class ServerResponse {
   Map<String, String> body;
   ResponseStatus status;
+  bool get isImage {
+    if (body[r'$$binaryType'] == 'image') return true;
+
+    if (body["@filePath"] is String) {
+      var mt = lookupMimeType(body["@filePath"]);
+      if (mt is String && mt.contains("image")) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   ServerResponse(this.body, this.status);
 }

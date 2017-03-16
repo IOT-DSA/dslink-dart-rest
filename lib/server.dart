@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data' show ByteData;
 import 'dart:io';
 
 import 'package:dslink/utils.dart' show logger;
+import 'package:dslink/common.dart' show Path;
 import "package:http_multi_server/http_multi_server.dart";
+import "package:mustache4dart/mustache4dart.dart";
+import "package:mime/mime.dart";
 
 import 'node_manager.dart';
 
@@ -94,8 +98,9 @@ class Server {
 
     if (authHead != 'Basic ${_authStr}') {
       var resp = req.response;
-      resp..headers
-          .set(HttpHeaders.WWW_AUTHENTICATE, 'Basic realm="DSA Rest Link"')
+      resp
+        ..headers
+            .set(HttpHeaders.WWW_AUTHENTICATE, 'Basic realm="DSA Rest Link"')
         ..statusCode = HttpStatus.UNAUTHORIZED
         ..close();
       return false;
@@ -119,10 +124,14 @@ class Server {
     switch (sr.method) {
       case 'OPTIONS':
         _options(sr);
-        return;
+        break;
       case 'GET':
+        if (sr.subscribe) {
+          _subscribe(sr);
+          return;
+        }
         _get(sr);
-        return;
+        break;
     }
   }
 
@@ -140,15 +149,19 @@ class Server {
 
   // 404 Page not found
   void _notFound(ServerRequest sr) {
+    _sendError(sr, HttpStatus.NOT_FOUND, 'not found');
+  }
+
+  void _sendError(ServerRequest sr, int status, String msg) {
     _addNoCacheHeaders(sr);
     sr.response
-      ..statusCode = HttpStatus.NOT_FOUND
+      ..statusCode = status
       ..headers.contentType = ContentType.JSON
-      ..writeln('{"error":"not found"}')
+      ..writeln('{"error": "$msg"}')
       ..close();
   }
 
-  void _sendJsonError(ServerRequest sr, ServerResponse resp) {
+  void _sendJson(ServerRequest sr, ServerResponse resp) {
     int sc;
     switch (resp.status) {
       case ResponseStatus.badRequest:
@@ -169,10 +182,10 @@ class Server {
     var body = JSON.encode(resp.body);
     _addNoCacheHeaders(sr);
     sr.response
-        ..statusCode = sc
-        ..headers.contentType = ContentType.JSON
-        ..writeln(body)
-        ..close();
+      ..statusCode = sc
+      ..headers.contentType = ContentType.JSON
+      ..writeln(body)
+      ..close();
   }
 
   // Respond to Options requests.
@@ -186,11 +199,147 @@ class Server {
   }
 
   Future<Null> _get(ServerRequest sr) async {
-    var resp = await _manager.getRequest(sr.path);
+    var resp = await _manager.getRequest(sr);
 
     if (resp.status != ResponseStatus.ok) {
-      _sendJsonError(sr, resp);
+      _sendJson(sr, resp);
       return;
     }
+
+    if (sr.isHtml) {
+      _sendHtml(sr, resp);
+    } else if (sr.returnValue) {
+      _sendValue(sr, resp);
+    } else {
+      _sendJson(sr, resp);
+    }
   }
+
+  void _sendHtml(ServerRequest req, ServerResponse resp) {
+    _addNoCacheHeaders(req);
+    req.response.headers.contentType = ContentType.HTML;
+
+    var name = resp.body.containsKey(r'$name')
+        ? resp.body[r'$name']
+        : resp.body[r'?name'];
+
+    if (resp.body[r'$type'] != null) {
+      req.response.writeln(Templates.valuePage({
+        'name': name,
+        'path': resp.body['?path'],
+        'editor': resp.body[r'$editor'],
+        'binaryType': resp.body[r'$binaryType'],
+        'isImage': resp.isImage,
+        'isNotImage': !resp.isImage
+      }));
+    } else {
+      var p = new Path(req.path);
+      var children = resp.body.keys
+          .where((String k) =>
+              k.isNotEmpty && !(const ['@', '!', '?', r'$'].contains(k[0])))
+          .map((String k) {
+        var n = resp.body[k];
+        var isVal = n[r'$type'] != null;
+        var isAct = n[r'$invokable'] != null && n[r'$invokable'] != 'never';
+        return {
+          'name': n['?name'],
+          'url': n['?url'],
+          'path': n['?path'],
+          'isValue': isVal,
+          'isAction': isAct,
+          'isNode': !isVal && !isAct
+        };
+      }).toList();
+      req.response.writeln(Templates.directoryList({
+        'name': name,
+        'path': resp.body['?path'],
+        'url': resp.body['?url'],
+        'parent': '${p.parentPath}.html',
+        'children': children
+      }));
+    }
+
+    req.response.close();
+  }
+
+  void _sendValue(ServerRequest req, ServerResponse resp) {
+    _addNoCacheHeaders(req);
+    String etag = resp.body['value_timestamp'];
+
+    req.response.headers
+      ..set('ETag', etag)
+      ..set('Cache-Control', 'public, max-age=31536000');
+
+    var lastEtag = req.request.headers.value('If-None-Match');
+    if (lastEtag == etag) {
+      req.response
+        ..statusCode = HttpStatus.NOT_MODIFIED
+        ..close();
+      return;
+    }
+
+    var value = resp.body['?value'];
+    if (value is Map || value is List) {
+      req.response
+        ..headers.contentType = ContentType.JSON
+        ..write(JSON.encode(value))
+        ..close();
+      return;
+    }
+    if (value is! ByteData) {
+      req.response
+        ..write(value)
+        ..close();
+      close();
+      return;
+    }
+
+    var bl = (value as ByteData)
+        .buffer
+        .asUint8List(value.offsetInBytes, value.lengthInBytes);
+    if (req.detectType) {
+      var result = lookupMimeType('binary', headerBytes: bl);
+      if (result != null) {
+        req.response.headers.contentType = ContentType.parse(result);
+      } else {
+        req.request.headers.contentType =
+            resp.isImage ? ContentType.parse('image/jpeg') : ContentType.BINARY;
+      }
+    } else {
+      req.request.headers.contentType =
+          resp.isImage ? ContentType.parse('image/jpeg') : ContentType.BINARY;
+    }
+
+    req.response
+      ..add(bl)
+      ..close();
+    return;
+  }
+
+  Future<Null> _subscribe(ServerRequest req) async {
+    if (!(await WebSocketTransformer.isUpgradeRequest(req.request))) {
+      _sendError(req, HttpStatus.BAD_REQUEST, 'Expected WebSocket Upgrade');
+      return;
+    }
+
+    WebSocket socket;
+    try {
+      socket = await WebSocketTransformer.upgrade(req.request);
+    } catch (e) {
+      _sendError(req, HttpStatus.INTERNAL_SERVER_ERROR,
+          'Failed to upgrade socket: $e');
+      return;
+    }
+
+    _manager.valueSubscribe(req, socket);
+  }
+}
+
+abstract class Templates {
+  static String _loadTemplateFile(String name) {
+    return new File('res/$name.mustache').readAsStringSync();
+  }
+
+  static Function valuePage = compile(_loadTemplateFile('value_page'));
+  static Function directoryList = compile(_loadTemplateFile('directory_list'));
 }

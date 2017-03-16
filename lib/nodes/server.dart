@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:io' show WebSocket;
 import "dart:typed_data";
-import 'dart:convert' show BASE64;
+import 'dart:convert' show BASE64, JSON;
 
 import 'package:dslink/dslink.dart';
 import 'package:dslink/utils.dart' show logger;
@@ -303,23 +304,80 @@ class ServerNode extends SimpleNode implements NodeManager {
     return null;
   }
 
-  Future<ServerResponse> getRequest(String path) async {
+  Future<ServerResponse> getRequest(ServerRequest sr) async {
     if (isDataHost) {
-      return _getClient(path);
+      return _getClient(sr);
     }
 
-    var hostPath = "${this.path}$path";
-    if (hostPath != "/" && hostPath.endsWith("/")) {
-      hostPath = hostPath.substring(0, hostPath.length - 1);
-    }
-    return _getData(hostPath);
+    return _getData(sr);
   }
 
-  Future<ServerResponse> _getClient(String pt) async {
-    var p = new Path(pt);
+  Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket) async {
+    ReqSubscribeListener sub;
+    RespSubscribeListener sub2;
+    void remoteValueUpdate(ValueUpdate update) {
+      if (socket.closeCode != null) {
+        sub?.cancel();
+        return;
+      }
+
+      var isBin = false;
+      var value = update.value;
+      if (value is ByteData) {
+        value = value.buffer.asUint8List(
+            value.offsetInBytes,
+            value.lengthInBytes
+        );
+      }
+
+      if (value is Uint8List) {
+        isBin = true;
+        value = BASE64.encode(value);
+      }
+
+      var msg = {
+        'value': value,
+        'timestamp': update.ts
+      };
+
+      if (isBin) msg['bin'] = true;
+      socket.add(JSON.encode(msg));
+    }
+
+    void hostValueUdate(ValueUpdate update) {
+      if (socket.closeCode != null) {
+        sub2?.cancel();
+        return;
+      }
+
+      socket.add(JSON.encode({
+        'value': update.value,
+        'timestamp': update.ts
+      }));
+    }
+
+    if (isDataHost) {
+      var hostPath = "${this.path}${sr.path}";
+      if (hostPath != "/" && hostPath.endsWith("/")) {
+        hostPath = hostPath.substring(0, hostPath.length - 1);
+      }
+      var n = provider.getNode(hostPath);
+      sub2 = n.subscribe(hostValueUdate);
+    } else {
+      sub = link.requester.subscribe(sr.path, remoteValueUpdate);
+    }
+
+    socket.done.then((_) {
+      sub?.cancel();
+      sub2?.cancel();
+    });
+  }
+
+  Future<ServerResponse> _getClient(ServerRequest sr) async {
+    var p = new Path(sr.path);
     if (!p.valid) {
       return new ServerResponse(
-          {'error': 'Invalid Path: $pt'}, ResponseStatus.badRequest);
+          {'error': 'Invalid Path: ${sr.path}'}, ResponseStatus.badRequest);
     }
 
     RemoteNode nd;
@@ -335,10 +393,19 @@ class ServerNode extends SimpleNode implements NodeManager {
       return new ServerResponse(
           {'error': 'Node not found'}, ResponseStatus.notFound);
     }
+
+    var body = await _getRemoteNodeMap(nd, sr);
+    return new ServerResponse(body, ResponseStatus.ok);
   }
 
-  Future<ServerResponse> _getData(String pt) async {
+  Future<ServerResponse> _getData(ServerRequest sr) async {
+    var hostPath = "${this.path}${sr.path}";
+    if (hostPath != "/" && hostPath.endsWith("/")) {
+      hostPath = hostPath.substring(0, hostPath.length - 1);
+    }
+
     // TODO: This
+    var n = provider.getNode(hostPath);
   }
 
   Future<Map> _getRemoteNodeMap(RemoteNode n, ServerRequest req) async {
@@ -409,7 +476,7 @@ class ServerNode extends SimpleNode implements NodeManager {
     if (val == null) return null;
 
     var value = val.value;
-    if (req.base64Value) {
+    if (req.returnValue) {
       if (value is ByteData) {
         value = value.buffer.asUint8List(
           value.offsetInBytes,
