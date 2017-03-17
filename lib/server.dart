@@ -132,6 +132,9 @@ class Server {
         }
         _get(sr);
         break;
+      case 'PUT':
+        _put(sr);
+        break;
     }
   }
 
@@ -196,6 +199,18 @@ class Server {
     sr.response
       ..writeln()
       ..close();
+  }
+
+  Future<Null> _put(ServerRequest sr) async {
+    if (!_manager.isDataHost) {
+      _sendError(sr, HttpStatus.NOT_IMPLEMENTED,
+          'Data client does not support creating/updating nodes.');
+      return;
+    }
+
+    var body = await _readJsonData(sr);
+    var resp = await _manager.putRequest(sr, body);
+    _sendJson(sr, resp);
   }
 
   Future<Null> _get(ServerRequest sr) async {
@@ -286,6 +301,7 @@ class Server {
         ..close();
       return;
     }
+
     if (value is! ByteData) {
       req.response
         ..write(value)
@@ -332,6 +348,28 @@ class Server {
     }
 
     _manager.valueSubscribe(req, socket);
+  }
+
+  Future<dynamic> _readJsonData(ServerRequest sr) async {
+    String content;
+    try {
+      content = await UTF8.decodeStream(sr.request);
+    } catch (e) {
+      logger.warning('Error decoding content. Request: ${sr.request.uri}', e);
+      return null;
+    }
+
+    try {
+      return JSON.decode(content);
+    } catch(e) {
+      logger.warning('Error JSON Decoding content: $content', e);
+      try {
+        return Uri.decodeComponent(content);
+      } catch (e) {
+        logger.warning('Unable to decode content: $content', e);
+        return null;
+      }
+    }
   }
 }
 

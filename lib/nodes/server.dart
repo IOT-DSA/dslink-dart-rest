@@ -8,6 +8,7 @@ import 'package:dslink/utils.dart' show logger;
 
 import 'create_value.dart';
 import 'remove.dart';
+import 'rest.dart';
 
 import '../server.dart';
 import '../node_manager.dart';
@@ -220,6 +221,7 @@ class ServerNode extends SimpleNode implements NodeManager {
   Server server;
 
   final LinkProvider link;
+  @override
   bool isDataHost = false;
   ServerNode(String path, this.link) : super(path);
 
@@ -304,6 +306,15 @@ class ServerNode extends SimpleNode implements NodeManager {
     return null;
   }
 
+  String _hostPath(String path) {
+    var hostPath = "${this.path}$path";
+    if (hostPath != "/" && hostPath.endsWith("/")) {
+      hostPath = hostPath.substring(0, hostPath.length - 1);
+    }
+    return hostPath;
+  }
+
+  @override
   Future<ServerResponse> getRequest(ServerRequest sr) async {
     if (isDataHost) {
       return _getClient(sr);
@@ -312,7 +323,54 @@ class ServerNode extends SimpleNode implements NodeManager {
     return _getData(sr);
   }
 
+  @override
+  Future<ServerResponse> putRequest(ServerRequest sr, Map body) async {
+    if (body is! Map) {
+      return new ServerResponse(
+          {'error': 'Invalid body'}, ResponseStatus.badRequest);
+    }
+    var hostPath = _hostPath(sr.path);
+    var p = new Path(hostPath);
+
+    var pathsToCreate = [];
+    var mp = p.parent;
+    while (!mp.isRoot) {
+      if (!provider.hasNode(mp.path)) {
+        pathsToCreate.add(mp.path);
+      }
+      mp = mp.parent;
+    }
+
+    for (var i = pathsToCreate.length - 1; i >= 0; i--) {
+      provider.addNode(pathsToCreate[i], RestNode.def());
+    }
+
+    var nd = provider.getNode(hostPath);
+    Map map;
+    if (nd == null) {
+      body[r'$is'] = RestNode.isType;
+      nd = provider.addNode(hostPath, RestNode.def(body));
+      map = _getNodeMap(nd, sr);
+    } else {
+      if (body.containsKey('?value')) {
+        nd.updateValue(body['?value']);
+        map = _getNodeMap(nd, sr);
+      } else {
+        map = _getNodeMap(nd, sr);
+        map.addAll(body);
+        map[r'$is'] = RestNode.isType;
+        map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
+        nd.load(map);
+      }
+    }
+
+    link.saveAsync();
+
+    return new ServerResponse(map, ResponseStatus.ok);
+  }
+
   Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket) async {
+    // ARG! Why aren't these subclasses of one super class/interface!
     ReqSubscribeListener sub;
     RespSubscribeListener sub2;
     void remoteValueUpdate(ValueUpdate update) {
@@ -324,10 +382,8 @@ class ServerNode extends SimpleNode implements NodeManager {
       var isBin = false;
       var value = update.value;
       if (value is ByteData) {
-        value = value.buffer.asUint8List(
-            value.offsetInBytes,
-            value.lengthInBytes
-        );
+        value =
+            value.buffer.asUint8List(value.offsetInBytes, value.lengthInBytes);
       }
 
       if (value is Uint8List) {
@@ -335,10 +391,7 @@ class ServerNode extends SimpleNode implements NodeManager {
         value = BASE64.encode(value);
       }
 
-      var msg = {
-        'value': value,
-        'timestamp': update.ts
-      };
+      var msg = {'value': value, 'timestamp': update.ts};
 
       if (isBin) msg['bin'] = true;
       socket.add(JSON.encode(msg));
@@ -350,17 +403,11 @@ class ServerNode extends SimpleNode implements NodeManager {
         return;
       }
 
-      socket.add(JSON.encode({
-        'value': update.value,
-        'timestamp': update.ts
-      }));
+      socket.add(JSON.encode({'value': update.value, 'timestamp': update.ts}));
     }
 
     if (isDataHost) {
-      var hostPath = "${this.path}${sr.path}";
-      if (hostPath != "/" && hostPath.endsWith("/")) {
-        hostPath = hostPath.substring(0, hostPath.length - 1);
-      }
+      var hostPath = _hostPath(sr.path);
       var n = provider.getNode(hostPath);
       sub2 = n.subscribe(hostValueUdate);
     } else {
@@ -399,13 +446,49 @@ class ServerNode extends SimpleNode implements NodeManager {
   }
 
   Future<ServerResponse> _getData(ServerRequest sr) async {
-    var hostPath = "${this.path}${sr.path}";
-    if (hostPath != "/" && hostPath.endsWith("/")) {
-      hostPath = hostPath.substring(0, hostPath.length - 1);
-    }
+    var hostPath = _hostPath(sr.path);
 
     // TODO: This
     var n = provider.getNode(hostPath);
+    if (n == null) {
+      return new ServerResponse(
+          {'error': 'Node not found'}, ResponseStatus.notFound);
+    }
+
+    var map = _getNodeMap(n, sr);
+
+    return new ServerResponse(map, ResponseStatus.ok);
+  }
+
+  Map<String, dynamic> _getNodeMap(SimpleNode n, ServerRequest req) {
+    if (n == null || (n is! RestNode && n is! ServerNode))
+      return {'error': 'No such node'};
+
+    var map = {'?name': n.name, '?path': req.path};
+
+    map..addAll(n.configs)..addAll(n.attributes);
+
+    for (SimpleNode child in n.children.values) {
+      if (child is! RestNode) continue;
+
+      map[child.name] = {
+        '?name': child.name,
+        '?path': req.path + '/${child.name}'
+      }..addAll(child.getSimpleMap());
+    }
+
+    if (n.lastValueUpdate != null && n.type != null) {
+      map
+        ..['?value'] = n.lastValueUpdate.value
+        ..['?value_timestamp'] = n.lastValueUpdate.ts;
+    }
+
+    map.keys
+        .where((String k) => k.startsWith(r'$$'))
+        .toList()
+        .forEach(map.remove);
+
+    return map;
   }
 
   Future<Map> _getRemoteNodeMap(RemoteNode n, ServerRequest req) async {
@@ -421,7 +504,8 @@ class ServerNode extends SimpleNode implements NodeManager {
 
     map..addAll(n.configs)..addAll(n.attributes);
 
-    if (map[r'$type'] is String) { // Has a type set, regardles of the value
+    if (map[r'$type'] is String) {
+      // Has a type set, regardles of the value
       var vals = await _getRemoteValues(req.path, req);
       if (vals != null) map.addAll(vals);
     }
@@ -478,10 +562,8 @@ class ServerNode extends SimpleNode implements NodeManager {
     var value = val.value;
     if (req.returnValue) {
       if (value is ByteData) {
-        value = value.buffer.asUint8List(
-          value.offsetInBytes,
-          value.lengthInBytes
-        );
+        value =
+            value.buffer.asUint8List(value.offsetInBytes, value.lengthInBytes);
       }
 
       if (value is Uint8List) {
@@ -489,12 +571,8 @@ class ServerNode extends SimpleNode implements NodeManager {
       }
     }
 
-    var map = {
-      '?value': value,
-      '?value_timestamp': val.ts
-    };
+    var map = {'?value': value, '?value_timestamp': val.ts};
 
     return map;
-
   }
 }

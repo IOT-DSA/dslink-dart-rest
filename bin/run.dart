@@ -47,184 +47,13 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
     }
 
     Map getNodeMap(SimpleNode n, {Uri uri}) {
-      if (n == null) {
-        return {
-          "error": "No Such Node"
-        };
-      }
 
-      if (n is! RestNode && n is! ServerNode) {
-        return {
-          "error": "No Such Node"
-        };
-      }
-
-      var p = new Path(n.path);
-      var map = {
-        "?name": p.name,
-        "?path": "/" + hostPath.split("/").skip(2).join("/")
-      };
-
-      map.addAll(n.configs);
-      map.addAll(n.attributes);
-
-      for (var key in n.children.keys) {
-        var child = n.children[key];
-
-        if (child is! RestNode) {
-          continue;
-        }
-
-        var x = new Path(child.path);
-        map[key] = {
-          "?name": x.name,
-          "?path": "/" + x.path.split("/").skip(2).join("/")
-        }..addAll(child.getSimpleMap());
-      }
-
-      if (n.lastValueUpdate != null && n.configs.containsKey(r"$type")) {
-        map["?value"] = n.lastValueUpdate.value;
-        map["?value_timestamp"] = n.lastValueUpdate.ts;
-      }
-
-      map.keys
-        .where((k) => k.toString().startsWith(r"$$"))
-        .toList()
-        .forEach(map.remove);
-
-      return map;
     }
 
     if (method == "GET") {
-      if (!serverNode.isDataHost) {
-
-      }
-
-      SimpleNode n = link.getNode(hostPath);
-
-      if (!(link.provider as SimpleNodeProvider).hasNode(hostPath)) {
-        response.statusCode = HttpStatus.NOT_FOUND;
-        response.headers.contentType = ContentType.JSON;
-        response.writeln(toJSON({
-          "error": "No Such Node"
-        }));
-        response.close();
-        return;
-      }
-
-      var map = getNodeMap(n);
-
-      if (uri.queryParameters.containsKey("val") ||
-        uri.queryParameters.containsKey("value")) {
-        map = map["?value"];
-        if (map is ByteData) {
-          response.headers.contentType = ContentType.BINARY;
-          response.add(map.buffer.asUint8List(
-            map.offsetInBytes,
-            map.lengthInBytes
-          ));
-        } else if (map is Map || map is List) {
-          response.headers.contentType = ContentType.JSON;
-          response.write(toJSON(map));
-        } else {
-          response.write(map);
-        }
-      } else if (uri.queryParameters.containsKey("watch") ||
-        uri.queryParameters.containsKey("subscribe")) {
-        if (!(await WebSocketTransformer.isUpgradeRequest(request))) {
-          request.response.statusCode = HttpStatus.BAD_REQUEST;
-          request.response.writeln("Bad Request: Expected WebSocket Upgrade.");
-          request.response.close();
-          return;
-        }
-
-        var socket = await WebSocketTransformer.upgrade(request);
-
-        RespSubscribeListener sub;
-        sub = n.subscribe((ValueUpdate update) {
-          if (socket.closeCode != null) {
-            if (sub != null) {
-              sub.cancel();
-            }
-            return;
-          }
-
-          socket.add(jsonUglyEncoder.convert({
-            "value": update.value,
-            "timestamp": update.ts
-          }));
-        });
-
-        socket.done.then((_) {
-          sub.cancel();
-          sub = null;
-        });
-        return;
-      } else {
-        response.headers.contentType = ContentType.JSON;
-        response.writeln(toJSON(map));
-      }
-      response.close();
-      return;
+     // Done
     } else if (method == "PUT") {
-      if (!serverNode.isDataHost) {
-        response.statusCode = HttpStatus.NOT_IMPLEMENTED;
-        response.headers.contentType = ContentType.JSON;
-        response.writeln(toJSON({
-          "error": "Data Client does not support creating/updating nodes"
-        }));
-        response.close();
-        return;
-      }
-
-      var json = await readJSONData(request);
-      var mp = p.parent;
-      var pathsToCreate = [];
-      while (!mp.isRoot) {
-        if (!(link.provider as SimpleNodeProvider).hasNode(mp.path)) {
-          pathsToCreate.add(mp.path);
-        }
-        mp = mp.parent;
-      }
-
-      if (pathsToCreate.isNotEmpty) {
-        pathsToCreate.sort();
-        for (var pr in pathsToCreate) {
-          link.addNode(pr, {
-            r"$is": "rest"
-          });
-        }
-      }
-
-      if ((link.provider as SimpleNodeProvider).hasNode(hostPath)) {
-        var node = link[hostPath];
-        Map map;
-        if (json.keys.length == 1 && json.keys.contains("?value")) {
-          node.updateValue(new ValueUpdate(json["?value"], ts: ValueUpdate.getTs()));
-          map = getNodeMap(node);
-        } else {
-          map = getNodeMap(node);
-          map.addAll(json);
-          map[r"$is"] = "rest";
-          map.keys.where((x) => map[x] == null).toList().forEach(map.remove);
-          node.load(map);
-        }
-        response.headers.contentType = ContentType.JSON;
-        response.writeln(toJSON(map));
-        response.close();
-        changed = true;
-        return;
-      }
-
-      json[r"$is"] = "rest";
-      var node = link.addNode(hostPath, json);
-      var map = getNodeMap(node);
-      map[r"$is"] = "rest";
-      response.headers.contentType = ContentType.JSON;
-      response.writeln(toJSON(map));
-      response.close();
-      changed = true;
-      return;
+    // Done
     } else if (method == "POST" || method == "PATCH") {
       var json = await readJSONData(request);
 
@@ -524,17 +353,7 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 }
 
 Future<dynamic> readJSONData(HttpRequest request) async {
-  var content = await request.transform(UTF8.decoder).join();
 
-  try {
-    return JSON.decode(content);
-  } catch (e) {
-    try {
-      return Uri.decodeComponent(content);
-    } catch (x) {
-      rethrow;
-    }
-  }
 }
 
 Future<Null> main(List<String> args) async {
