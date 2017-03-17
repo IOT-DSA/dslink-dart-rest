@@ -59,57 +59,15 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
 
       if (!serverNode.isDataHost) {
         if (json is Map && json.keys.length == 1 && json.keys.contains("?value")) {
-          var val = json["?value"];
-          await link.requester.set(ourPath, val);
-          response.headers.contentType = ContentType.JSON;
-          response.writeln(
-            toJSON(
-              await getRemoteNodeMap(
-                await link.requester.getRemoteNode(ourPath),
-                uri: uri
-              )
-            )
-          );
-          response.close();
-          return;
+        // DONE
         } else if (json is List && uri.path == "/_/values") {
-          var values = {};
-
-          for (String key in json.where((x) => x is String)) {
-            var result = await link.requester.getNodeValue(key).timeout(const Duration(seconds: 5));
-            values[key] = {
-              "timestamp": result.ts,
-              "value": result.value
-            };
-          }
-
-          response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(values));
-          response.close();
-          return;
+        // DONE
         } else if (uri.queryParameters.containsKey("val") ||
-          uri.queryParameters.containsKey("value")) {
-          await link.requester.set(ourPath, json);
-          response.headers.contentType = ContentType.JSON;
-          response.writeln(toJSON(
-            await getRemoteNodeMap(
-              await link.requester.getRemoteNode(ourPath),
-              uri: uri
-            )));
-          response.close();
-          return;
+            uri.queryParameters.containsKey("value")) {
+          // DONE
         } else if (uri.queryParameters.containsKey("invoke")) {
           var node = await link.requester.getRemoteNode(ourPath)
             .timeout(const Duration(seconds: 5), onTimeout: () => null);
-
-          if (node == null) {
-            response.headers.contentType = ContentType.JSON;
-            response.writeln(toJSON({
-              "error": "Node not found."
-            }));
-            response.close();
-            return;
-          }
 
           if (node.configs[r"$invokable"] == null) {
             response.statusCode = HttpStatus.NOT_IMPLEMENTED;
@@ -237,8 +195,9 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
             response.close();
             return;
           }
+          // END of Invoke
         } else if (json is Map
-          && json.keys.every(
+            && json.keys.every(
             (n) {
               var k = n.toString();
 
@@ -276,6 +235,8 @@ launchServer(bool local, int port, String pwd, String user, ServerNode serverNod
           return;
         }
       }
+
+      // IS Data host below
 
       SimpleNode node = link.getNode(hostPath);
 

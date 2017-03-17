@@ -317,10 +317,10 @@ class ServerNode extends SimpleNode implements NodeManager {
   @override
   Future<ServerResponse> getRequest(ServerRequest sr) async {
     if (isDataHost) {
-      return _getClient(sr);
-    }
+      return _getData(sr);
 
-    return _getData(sr);
+    }
+    return _getClient(sr);
   }
 
   @override
@@ -367,6 +367,107 @@ class ServerNode extends SimpleNode implements NodeManager {
     link.saveAsync();
 
     return new ServerResponse(map, ResponseStatus.ok);
+  }
+
+
+  @override
+  Future<ServerResponse> postRequest(ServerRequest sr, dynamic body) async {
+    if (isDataHost) {
+      return _postData(sr, body);
+    }
+
+    if (body is Map && body.length == 1 && body.containsKey('?value')) {
+      return _updateValue(sr, body as Map);
+    }
+
+    if (body is List && sr.path == '/_/vaues') {
+      return _getMultiValues(sr, body as List);
+    }
+
+    if (sr.returnValue) {
+      return _setRemoteNode(sr, body);
+    }
+
+    if (sr.isInvoke) {
+      return _invokeRemoteNode(sr, body);
+    }
+
+    return _postClient(sr, body);
+  }
+
+  Future<ServerResponse> _setRemoteNode(ServerRequest sr, Map body) async {
+    RemoteNode nd;
+    try {
+      await link.requester.set(sr.path, body).timeout(_timeout);
+      nd = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
+    } on TimeoutException {
+      return new ServerResponse(
+        {'error': 'Server timed out accessing remote node: ${sr.path}'},
+        ResponseStatus.error);
+    }
+
+    if (nd == null) {
+      return new ServerResponse(
+        {'error': 'Unable to find remote node: ${sr.path}'},
+        ResponseStatus.notFound);
+    }
+
+    var map = await _getRemoteNodeMap(nd, sr);
+    return new ServerResponse(map, ResponseStatus.ok);
+  }
+
+  Future<ServerResponse> _getMultiValues(ServerRequest sr, List body) async {
+    var vals = body.where((el) => el is String).toList();
+    var futs = <Future<ValueUpdate>>[];
+
+    for (String key in vals) {
+      futs.add(link.requester.getNodeValue(key)
+            .timeout(_timeout, onTimeout: () => null));
+    }
+
+    var results = await Future.wait<ValueUpdate>(futs);
+    var values = <String,dynamic>{};
+    for (var i = 0; i < vals.length; i++) {
+      values[vals[i]] = {
+        'value': results[i].value,
+        'timestamp': results[i].ts
+      };
+    }
+
+    return new ServerResponse(values, ResponseStatus.ok);
+  }
+
+  Future<ServerResponse> _updateValue(ServerRequest sr, Map body) async {
+    var value = body['?value'];
+
+    RemoteNode nd;
+    try {
+      await link.requester.set(sr.path, value).timeout(_timeout);
+      nd = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
+    } on TimeoutException {
+      logger.warning('Timed out trying to set value: $value on ${sr.path}');
+
+      return new ServerResponse(
+        {'error': 'Server timed out trying to set remote path: ${sr.path}'},
+        ResponseStatus.error);
+    }
+
+    if (nd == null) {
+      return new ServerResponse({
+          'error': 'Unable to update value: ${sr.path}'
+        }, ResponseStatus.error);
+    }
+
+    var map = await _getRemoteNodeMap(nd, sr);
+    return new ServerResponse(map, ResponseStatus.ok);
+  }
+
+  Future<ServerResponse> _postData(ServerRequest sr, dynamic body) async {
+    // TODO:
+  }
+
+  Future<ServerResponse> _postClient(ServerRequest sr, dynamic body) async {
+
   }
 
   Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket) async {
@@ -575,4 +676,29 @@ class ServerNode extends SimpleNode implements NodeManager {
 
     return map;
   }
+
+  Future<ServerResponse> _invokeRemoteNode(ServerRequest sr, Map body) async {
+    RemoteNode node;
+    try {
+      node = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
+    } on TimeoutException {
+      return new ServerResponse(
+        {'error': 'Timed out trying to retreive remote node: ${sr.path}'},
+        ResponseStatus.error);
+    }
+
+    if (node == null) {
+      return new ServerResponse(
+        {'error': 'Node not found'}, ResponseStatus.notFound);
+    }
+
+    if (node.configs[r'$invokable'] == null
+        || node.configs[r'$invokable'] == 'never') {
+      return new ServerResponse(
+        {'error': 'Node is not invokable'}, ResponseStatus.notImplemented);
+    }
+
+
+  }
+
 }

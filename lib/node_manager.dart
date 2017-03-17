@@ -7,6 +7,7 @@ abstract class NodeManager {
 
   Future<ServerResponse> getRequest(ServerRequest sr);
   Future<ServerResponse> putRequest(ServerRequest sr, Map body);
+  Future<ServerResponse> postRequest(ServerRequest sr, dynamic body);
   Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket);
 }
 
@@ -16,6 +17,7 @@ class ServerRequest {
   HttpResponse get response => request.response;
   String get method => request.method;
   bool isHtml = false;
+  bool get isInvoke => request.uri.queryParameters.containsKey('invoke');
   bool get childValues => request.uri.queryParameters.containsKey('values');
   bool get subscribe => request.uri.queryParameters.containsKey('watch') ||
       request.uri.queryParameters.containsKey('subscribe');
@@ -61,4 +63,4 @@ class ServerResponse {
   ServerResponse(this.body, this.status);
 }
 
-enum ResponseStatus { badRequest, notFound, error, ok }
+enum ResponseStatus { badRequest, notFound, notImplemented, error, ok }

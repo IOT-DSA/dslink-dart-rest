@@ -135,6 +135,10 @@ class Server {
       case 'PUT':
         _put(sr);
         break;
+      case 'POST':
+      case 'PATCH':
+        _post(sr);
+        break;
     }
   }
 
@@ -176,6 +180,9 @@ class Server {
       case ResponseStatus.ok:
         sc = HttpStatus.OK;
         break;
+      case ResponseStatus.notImplemented:
+        sc = HttpStatus.NOT_IMPLEMENTED;
+        break;
       case ResponseStatus.error:
       default:
         sc = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -199,6 +206,12 @@ class Server {
     sr.response
       ..writeln()
       ..close();
+  }
+
+  Future<Null> _post(ServerRequest sr) async {
+    var body = await _readJsonData(sr);
+
+    var resp = await _manager.postRequest(sr, body);
   }
 
   Future<Null> _put(ServerRequest sr) async {
