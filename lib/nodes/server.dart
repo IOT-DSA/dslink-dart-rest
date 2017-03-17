@@ -462,6 +462,30 @@ class ServerNode extends SimpleNode implements NodeManager {
     return new ServerResponse(map, ResponseStatus.ok);
   }
 
+  Future<ServerResponse> _invokeRemoteNode(ServerRequest sr, Map body) async {
+    RemoteNode node;
+    try {
+      node = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
+    } on TimeoutException {
+      return new ServerResponse(
+          {'error': 'Timed out trying to retreive remote node: ${sr.path}'},
+          ResponseStatus.error);
+    }
+
+    if (node == null) {
+      return new ServerResponse(
+          {'error': 'Node not found'}, ResponseStatus.notFound);
+    }
+
+    if (node.configs[r'$invokable'] == null
+        || node.configs[r'$invokable'] == 'never') {
+      return new ServerResponse(
+          {'error': 'Node is not invokable'}, ResponseStatus.notImplemented);
+    }
+
+
+  }
+
   Future<ServerResponse> _postData(ServerRequest sr, dynamic body) async {
     // TODO:
   }
@@ -676,29 +700,4 @@ class ServerNode extends SimpleNode implements NodeManager {
 
     return map;
   }
-
-  Future<ServerResponse> _invokeRemoteNode(ServerRequest sr, Map body) async {
-    RemoteNode node;
-    try {
-      node = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
-    } on TimeoutException {
-      return new ServerResponse(
-        {'error': 'Timed out trying to retreive remote node: ${sr.path}'},
-        ResponseStatus.error);
-    }
-
-    if (node == null) {
-      return new ServerResponse(
-        {'error': 'Node not found'}, ResponseStatus.notFound);
-    }
-
-    if (node.configs[r'$invokable'] == null
-        || node.configs[r'$invokable'] == 'never') {
-      return new ServerResponse(
-        {'error': 'Node is not invokable'}, ResponseStatus.notImplemented);
-    }
-
-
-  }
-
 }
