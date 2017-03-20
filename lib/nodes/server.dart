@@ -463,6 +463,14 @@ class ServerNode extends SimpleNode implements NodeManager {
   }
 
   Future<ServerResponse> _invokeRemoteNode(ServerRequest sr, Map body) async {
+
+    ServerResponse sendError(DSError error) => new ServerResponse({'error': {
+      'message': error.msg,
+      'detail': error.detail,
+      'path': error.path,
+      'phase': error.phase
+    }}, ResponseStatus.error);
+
     RemoteNode node;
     try {
       node = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
@@ -483,15 +491,94 @@ class ServerNode extends SimpleNode implements NodeManager {
           {'error': 'Node is not invokable'}, ResponseStatus.notImplemented);
     }
 
+    var updates = <RequesterInvokeUpdate>[];
+    var stream = link.requester.invoke(sr.path, body);
+    var sub = stream.listen((RequesterInvokeUpdate up) => updates.add(up));
 
+    int timeoutSec = sr.timeout ?? 30;
+    if (timeoutSec >= 300) timeoutSec = 300;
+
+    await sub.asFuture().timeout(new Duration(seconds: timeoutSec),
+        onTimeout: () { sub.cancel(); });
+
+    if (sr.binary) {
+      if (updates != null || updates.isNotEmpty) {
+        for (var up in updates) {
+          if (up.error != null) return sendError(up.error);
+
+          for (List row in up.rows) {
+            for (var c in row) {
+              if (c is ByteData) {
+                return new ServerResponse({'data':
+                c.buffer.asUint8List(c.offsetInBytes, c.lengthInBytes)},
+                    ResponseStatus.binary);
+              }
+            }
+          }
+        }
+      }
+
+      return new ServerResponse({'error': 'Not a binary invoke'},
+          ResponseStatus.badRequest);
+    } // End binary
+
+    var result  = {
+      'columns': [],
+      'rows': []
+    };
+
+    for (var up in updates) {
+      if (up.error != null) return sendError(up.error);
+
+      result['columns'].addAll(up.columns.map((x) => x.getData()).toList());
+      result['rows'].addAll(up.rows);
+    }
+
+    return new ServerResponse(result, ResponseStatus.ok);
   }
 
   Future<ServerResponse> _postData(ServerRequest sr, dynamic body) async {
-    // TODO:
+    // TODO: On this next!!
   }
 
   Future<ServerResponse> _postClient(ServerRequest sr, dynamic body) async {
+    if (body is! Map || !body.keys.every((kv) {
+      var k = kv.toString();
+      return k.startsWith('@') || k == '?value';
+    })) {
+      return new ServerResponse(
+        {'error': 'Data client does not support updating nodes'},
+        ResponseStatus.notImplemented);
+    }
 
+    var futs = <Future>[];
+    for (var key in body.keys) {
+      String p = sr.path;
+      if (key != '?value') {
+        p += '/$key';
+      }
+
+      futs.add(link.requester.set(p, body[key]));
+    }
+
+    await Future.wait(futs);
+    RemoteNode nd;
+    try {
+      nd = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
+    } on TimeoutException {
+      return new ServerResponse(
+          {'error': 'Server timed out trying to set remote path: ${sr.path}'},
+          ResponseStatus.error);
+    }
+
+    if (nd == null) {
+      return new ServerResponse({
+        'error': 'Unable to update value: ${sr.path}'
+      }, ResponseStatus.error);
+    }
+
+    var map = await _getRemoteNodeMap(nd, sr);
+    return new ServerResponse(map, ResponseStatus.ok);
   }
 
   Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket) async {

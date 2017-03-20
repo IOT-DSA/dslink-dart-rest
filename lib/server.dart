@@ -212,6 +212,21 @@ class Server {
     var body = await _readJsonData(sr);
 
     var resp = await _manager.postRequest(sr, body);
+    if (resp.status != ResponseStatus.binary) {
+      _sendJson(sr, resp);
+    } else {
+      // Binary
+      if (sr.detectType) {
+        var res = lookupMimeType('binary', headerBytes: body['data']);
+        sr.response.headers.contentType =
+            (res != null ? ContentType.parse(res) : ContentType.BINARY);
+      } else {
+        sr.response.headers.contentType = ContentType.BINARY;
+      }
+
+      sr.response..add(body['data'])
+            ..close();
+    }
   }
 
   Future<Null> _put(ServerRequest sr) async {

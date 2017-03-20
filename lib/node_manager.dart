@@ -17,6 +17,7 @@ class ServerRequest {
   HttpResponse get response => request.response;
   String get method => request.method;
   bool isHtml = false;
+  bool get binary => request.uri.queryParameters.containsKey('binary');
   bool get isInvoke => request.uri.queryParameters.containsKey('invoke');
   bool get childValues => request.uri.queryParameters.containsKey('values');
   bool get subscribe => request.uri.queryParameters.containsKey('watch') ||
@@ -25,6 +26,8 @@ class ServerRequest {
   bool get returnValue =>
       request.uri.queryParameters.containsKey('value') ||
       request.uri.queryParameters.containsKey('val');
+  int get timeout => int.parse(request.uri.queryParameters['timeout'],
+      onError: (_) => null);
 
 
   ServerRequest(this.request) {
@@ -46,7 +49,7 @@ class ServerRequest {
 }
 
 class ServerResponse {
-  Map<String, String> body;
+  Map<String, dynamic> body;
   ResponseStatus status;
   bool get isImage {
     if (body[r'$$binaryType'] == 'image') return true;
@@ -63,4 +66,4 @@ class ServerResponse {
   ServerResponse(this.body, this.status);
 }
 
-enum ResponseStatus { badRequest, notFound, notImplemented, error, ok }
+enum ResponseStatus { badRequest, notFound, notImplemented, error, ok, binary }
