@@ -8,7 +8,6 @@ class RestNode extends SimpleNode {
 
   static Map<String, dynamic> def([Map<String, dynamic> conf]) {
     var ret = {
-      r'$is': isType,
       CreateNode.pathName: CreateNode.def(),
       CreateValue.pathName: CreateValue.def(),
       RemoveNode.pathName: RemoveNode.def()
@@ -19,7 +18,7 @@ class RestNode extends SimpleNode {
         ret[key] = val;
       });
     }
-
+    ret[r'$is'] = isType; // Prevent conf from over writing $is.
     return ret;
   }
 
