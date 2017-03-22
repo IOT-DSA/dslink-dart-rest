@@ -77,6 +77,7 @@ class AddServer extends SimpleNode {
     if (local == null) local = false;
 
     ret[_success] = await Server.checkPort(port);
+
     if (!ret[_success]) {
       return ret..[_message] = "Unable to bind to port";
     }
@@ -88,7 +89,7 @@ class AddServer extends SimpleNode {
 
     link.saveAsync();
 
-    ret[_success] = 'Success';
+    ret[_message] = 'Success';
     return ret;
   }
 }
