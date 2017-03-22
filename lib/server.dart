@@ -132,12 +132,20 @@ class Server {
         }
         _get(sr);
         break;
+      case 'DELETE':
+        _delete(sr);
+        break;
       case 'PUT':
         _put(sr);
         break;
       case 'POST':
       case 'PATCH':
         _post(sr);
+        break;
+      default:
+        var resp = new ServerResponse({'error': 'Bad Request'},
+            ResponseStatus.badRequest);
+        _sendJson(sr, resp);
         break;
     }
   }
@@ -206,6 +214,12 @@ class Server {
     sr.response
       ..writeln()
       ..close();
+  }
+
+  Future<Null> _delete(ServerRequest sr) async {
+    var resp = await _manager.deleteRequest(sr);
+
+    _sendJson(sr, resp);
   }
 
   Future<Null> _post(ServerRequest sr) async {
@@ -399,6 +413,7 @@ class Server {
       }
     }
   }
+
 }
 
 abstract class Templates {

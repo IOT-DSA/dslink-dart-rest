@@ -6,6 +6,7 @@ abstract class NodeManager {
   bool get isDataHost;
 
   Future<ServerResponse> getRequest(ServerRequest sr);
+  Future<ServerResponse> deleteRequest(ServerRequest sr);
   Future<ServerResponse> putRequest(ServerRequest sr, Map body);
   Future<ServerResponse> postRequest(ServerRequest sr, dynamic body);
   Future<Null> valueSubscribe(ServerRequest sr, WebSocket socket);

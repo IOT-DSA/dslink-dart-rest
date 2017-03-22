@@ -369,6 +369,25 @@ class ServerNode extends SimpleNode implements NodeManager {
     return new ServerResponse(map, ResponseStatus.ok);
   }
 
+  @override
+  Future<ServerResponse> deleteRequest(ServerRequest sr) async {
+    if (!isDataHost)
+      return new ServerResponse({'error':'Data clients do not support DELETE'},
+          ResponseStatus.notImplemented);
+
+    var hostPath = _hostPath(sr.path);
+    var node = provider.getNode(hostPath);
+
+    if (node is! RestNode || node is! ServerNode) {
+      return new ServerResponse({'error': 'Not found'},
+          ResponseStatus.notFound);
+    }
+
+    var map = _getNodeMap(node, sr);
+    node.remove();
+    link.saveAsync();
+    return new ServerResponse(map, ResponseStatus.ok);
+  }
 
   @override
   Future<ServerResponse> postRequest(ServerRequest sr, dynamic body) async {
@@ -538,7 +557,29 @@ class ServerNode extends SimpleNode implements NodeManager {
   }
 
   Future<ServerResponse> _postData(ServerRequest sr, dynamic body) async {
-    // TODO: On this next!!
+    var hostPath = _hostPath(sr.path);
+    var node = provider.getNode(hostPath);
+
+    var map = {};
+    if (node == null) {
+      node = provider.addNode(hostPath, body);
+      map = _getNodeMap(node, sr);
+      return new ServerResponse(map, ResponseStatus.ok);
+    }
+
+    if (body is Map && body.length == 1 && body.keys.contains('?value')) {
+      node.updateValue(body['?value']);
+      map = _getNodeMap(node, sr);
+    } else if (body is Map) {
+      node.load(RestNode.def(body));
+      map = _getNodeMap(node, sr);
+    } else if (sr.returnValue) {
+      node.updateValue(body);
+      map = _getNodeMap(node, sr);
+    }
+
+    link.saveAsync();
+    return new ServerResponse(map, ResponseStatus.ok);
   }
 
   Future<ServerResponse> _postClient(ServerRequest sr, dynamic body) async {
