@@ -379,7 +379,7 @@ class ServerNode extends SimpleNode implements NodeManager {
     var hostPath = _hostPath(sr.path);
     var node = provider.getNode(hostPath);
 
-    if (node is! RestNode || node is! ServerNode) {
+    if (node is! RestNode && node is! ServerNode) {
       return new ServerResponse({'error': 'Not found'},
           ResponseStatus.notFound);
     }
