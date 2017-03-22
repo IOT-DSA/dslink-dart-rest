@@ -326,10 +326,6 @@ class ServerNode extends SimpleNode implements NodeManager {
 
   @override
   Future<ServerResponse> putRequest(ServerRequest sr, Map body) async {
-    if (body is! Map) {
-      return new ServerResponse(
-          {'error': 'Invalid body'}, ResponseStatus.badRequest);
-    }
     var hostPath = _hostPath(sr.path);
     var p = new Path(hostPath);
 

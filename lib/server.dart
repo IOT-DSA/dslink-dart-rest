@@ -251,6 +251,12 @@ class Server {
     }
 
     var body = await _readJsonData(sr);
+    if (body is! Map) {
+      _sendJson(sr, new ServerResponse(
+          {'error': 'Invalid body'}, ResponseStatus.badRequest));
+      return;
+    }
+
     var resp = await _manager.putRequest(sr, body);
     _sendJson(sr, resp);
   }
