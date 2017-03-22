@@ -1,5 +1,8 @@
 import 'dart:async';
+
 import 'package:dslink/dslink.dart';
+
+import 'rest.dart';
 
 class CreateValue extends SimpleNode {
   static const String isType = 'createMetric';
@@ -63,15 +66,17 @@ class CreateValue extends SimpleNode {
     var type = params["type"];
 
     var parent = new Path(path).parent;
-    var node = link.addNode("${parent.path}/${name}", {
-      r"$is": "rest",
+
+    var map = {
       r"$type": type,
       r"$writable": "write"
-    });
+    };
 
     if (editor != null && editor.isNotEmpty) {
-      node.configs[r"$editor"] = editor;
+      map[r"$editor"] = editor;
     }
+
+    provider.addNode("${parent.path}/${name}", RestNode.def(map));
 
     link.saveAsync();
     return ret;
@@ -109,9 +114,7 @@ class CreateNode extends SimpleNode {
     var name = params["name"];
 
     var parent = new Path(path).parent;
-    link.addNode("${parent.path}/${name}", {
-      r"$is": "rest"
-    });
+    provider.addNode("${parent.path}/${name}", RestNode.def());
     link.saveAsync();
 
     return ret;
