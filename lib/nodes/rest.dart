@@ -23,5 +23,4 @@ class RestNode extends SimpleNode {
   }
 
   RestNode(String path) : super(path);
-
 }

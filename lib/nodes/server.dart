@@ -319,7 +319,6 @@ class ServerNode extends SimpleNode implements NodeManager {
   Future<ServerResponse> getRequest(ServerRequest sr) async {
     if (isDataHost) {
       return _getData(sr);
-
     }
     return _getClient(sr);
   }
@@ -369,15 +368,15 @@ class ServerNode extends SimpleNode implements NodeManager {
   @override
   Future<ServerResponse> deleteRequest(ServerRequest sr) async {
     if (!isDataHost)
-      return new ServerResponse({'error':'Data clients do not support DELETE'},
+      return new ServerResponse({'error': 'Data clients do not support DELETE'},
           ResponseStatus.notImplemented);
 
     var hostPath = _hostPath(sr.path);
     var node = provider.getNode(hostPath);
 
     if (node is! RestNode && node is! ServerNode) {
-      return new ServerResponse({'error': 'Not found'},
-          ResponseStatus.notFound);
+      return new ServerResponse(
+          {'error': 'Not found'}, ResponseStatus.notFound);
     }
 
     var map = _getNodeMap(node, sr);
@@ -418,14 +417,14 @@ class ServerNode extends SimpleNode implements NodeManager {
       nd = await link.requester.getRemoteNode(sr.path).timeout(_timeout);
     } on TimeoutException {
       return new ServerResponse(
-        {'error': 'Server timed out accessing remote node: ${sr.path}'},
-        ResponseStatus.error);
+          {'error': 'Server timed out accessing remote node: ${sr.path}'},
+          ResponseStatus.error);
     }
 
     if (nd == null) {
       return new ServerResponse(
-        {'error': 'Unable to find remote node: ${sr.path}'},
-        ResponseStatus.notFound);
+          {'error': 'Unable to find remote node: ${sr.path}'},
+          ResponseStatus.notFound);
     }
 
     var map = await _getRemoteNodeMap(nd, sr);
@@ -437,17 +436,15 @@ class ServerNode extends SimpleNode implements NodeManager {
     var futs = <Future<ValueUpdate>>[];
 
     for (String key in vals) {
-      futs.add(link.requester.getNodeValue(key)
-            .timeout(_timeout, onTimeout: () => null));
+      futs.add(link.requester
+          .getNodeValue(key)
+          .timeout(_timeout, onTimeout: () => null));
     }
 
     var results = await Future.wait<ValueUpdate>(futs);
-    var values = <String,dynamic>{};
+    var values = <String, dynamic>{};
     for (var i = 0; i < vals.length; i++) {
-      values[vals[i]] = {
-        'value': results[i].value,
-        'timestamp': results[i].ts
-      };
+      values[vals[i]] = {'value': results[i].value, 'timestamp': results[i].ts};
     }
 
     return new ServerResponse(values, ResponseStatus.ok);
@@ -464,14 +461,13 @@ class ServerNode extends SimpleNode implements NodeManager {
       logger.warning('Timed out trying to set value: $value on ${sr.path}');
 
       return new ServerResponse(
-        {'error': 'Server timed out trying to set remote path: ${sr.path}'},
-        ResponseStatus.error);
+          {'error': 'Server timed out trying to set remote path: ${sr.path}'},
+          ResponseStatus.error);
     }
 
     if (nd == null) {
-      return new ServerResponse({
-          'error': 'Unable to update value: ${sr.path}'
-        }, ResponseStatus.error);
+      return new ServerResponse({'error': 'Unable to update value: ${sr.path}'},
+          ResponseStatus.error);
     }
 
     var map = await _getRemoteNodeMap(nd, sr);
@@ -479,13 +475,14 @@ class ServerNode extends SimpleNode implements NodeManager {
   }
 
   Future<ServerResponse> _invokeRemoteNode(ServerRequest sr, Map body) async {
-
-    ServerResponse sendError(DSError error) => new ServerResponse({'error': {
-      'message': error.msg,
-      'detail': error.detail,
-      'path': error.path,
-      'phase': error.phase
-    }}, ResponseStatus.error);
+    ServerResponse sendError(DSError error) => new ServerResponse({
+          'error': {
+            'message': error.msg,
+            'detail': error.detail,
+            'path': error.path,
+            'phase': error.phase
+          }
+        }, ResponseStatus.error);
 
     RemoteNode node;
     try {
@@ -501,8 +498,8 @@ class ServerNode extends SimpleNode implements NodeManager {
           {'error': 'Node not found'}, ResponseStatus.notFound);
     }
 
-    if (node.configs[r'$invokable'] == null
-        || node.configs[r'$invokable'] == 'never') {
+    if (node.configs[r'$invokable'] == null ||
+        node.configs[r'$invokable'] == 'never') {
       return new ServerResponse(
           {'error': 'Node is not invokable'}, ResponseStatus.notImplemented);
     }
@@ -515,9 +512,11 @@ class ServerNode extends SimpleNode implements NodeManager {
     if (timeoutSec >= 300) timeoutSec = 300;
 
     await sub.asFuture().timeout(new Duration(seconds: timeoutSec),
-        onTimeout: () { sub.cancel(); });
+        onTimeout: () {
+      sub.cancel();
+    });
 
-    if (sr.binary) {
+    if (sr.isBinary) {
       if (updates != null || updates.isNotEmpty) {
         for (var up in updates) {
           if (up.error != null) return sendError(up.error);
@@ -525,23 +524,20 @@ class ServerNode extends SimpleNode implements NodeManager {
           for (List row in up.rows) {
             for (var c in row) {
               if (c is ByteData) {
-                return new ServerResponse({'data':
-                c.buffer.asUint8List(c.offsetInBytes, c.lengthInBytes)},
-                    ResponseStatus.binary);
+                return new ServerResponse({
+                  'data': c.buffer.asUint8List(c.offsetInBytes, c.lengthInBytes)
+                }, ResponseStatus.binary);
               }
             }
           }
         }
       }
 
-      return new ServerResponse({'error': 'Not a binary invoke'},
-          ResponseStatus.badRequest);
+      return new ServerResponse(
+          {'error': 'Not a binary invoke'}, ResponseStatus.badRequest);
     } // End binary
 
-    var result  = {
-      'columns': [],
-      'rows': []
-    };
+    var result = {'columns': [], 'rows': []};
 
     for (var up in updates) {
       if (up.error != null) return sendError(up.error);
@@ -580,13 +576,14 @@ class ServerNode extends SimpleNode implements NodeManager {
   }
 
   Future<ServerResponse> _postClient(ServerRequest sr, dynamic body) async {
-    if (body is! Map || !body.keys.every((kv) {
-      var k = kv.toString();
-      return k.startsWith('@') || k == '?value';
-    })) {
+    if (body is! Map ||
+        !body.keys.every((kv) {
+          var k = kv.toString();
+          return k.startsWith('@') || k == '?value';
+        })) {
       return new ServerResponse(
-        {'error': 'Data client does not support updating nodes'},
-        ResponseStatus.notImplemented);
+          {'error': 'Data client does not support updating nodes'},
+          ResponseStatus.notImplemented);
     }
 
     var futs = <Future>[];
@@ -610,9 +607,8 @@ class ServerNode extends SimpleNode implements NodeManager {
     }
 
     if (nd == null) {
-      return new ServerResponse({
-        'error': 'Unable to update value: ${sr.path}'
-      }, ResponseStatus.error);
+      return new ServerResponse({'error': 'Unable to update value: ${sr.path}'},
+          ResponseStatus.error);
     }
 
     var map = await _getRemoteNodeMap(nd, sr);
@@ -774,7 +770,7 @@ class ServerNode extends SimpleNode implements NodeManager {
 
       m.addAll(ch.getSimpleMap());
 
-      if (req.childValues && m[r'$type'] is String) {
+      if (req.hasChildValues && m[r'$type'] is String) {
         var vals = await _getRemoteValues(trp, req);
         if (vals != null) m.addAll(vals);
       }
