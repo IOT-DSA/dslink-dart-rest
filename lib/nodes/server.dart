@@ -146,7 +146,9 @@ class EditServer extends SimpleNode {
         ]
       };
 
-  EditServer(String path) : super(path);
+  final LinkProvider link;
+
+  EditServer(String path, this.link) : super(path);
 
   @override
   Future<Map<String, dynamic>> onInvoke(Map<String, dynamic> params) async {
@@ -172,6 +174,7 @@ class EditServer extends SimpleNode {
       ret
         ..[_success] = true
         ..[_message] = 'Success!';
+      link.saveAsync();
     } else {
       ret
         ..[_success] = false
@@ -284,6 +287,14 @@ class ServerNode extends SimpleNode implements NodeManager {
     if (server != null) {
       if (server.port == port && server.isLocal == local) {
         server.updateAuth(user, pass);
+        if (type == DataHost) {
+          isDataHost = true;
+        } else {
+          isDataHost = false;
+        }
+        configs[_type] = type;
+        configs[_user] = user;
+        configs[_pass] = pass;
         return null;
       }
 
@@ -303,7 +314,18 @@ class ServerNode extends SimpleNode implements NodeManager {
       return e.toString();
     }
 
-    if (type == DataHost) isDataHost = true;
+    if (type == DataHost) {
+      isDataHost = true;
+    } else {
+      isDataHost = false;
+    }
+
+    configs[_type] = type;
+    configs[_user] = user;
+    configs[_pass] = pass;
+    configs[_local] = local;
+    configs[_port] = port;
+
     return null;
   }
 
