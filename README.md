@@ -12,6 +12,15 @@ If a password was provided, but not a username, the username is automatically `d
 ### Fetch Node
 
 **Method**: GET<br/>
+
+**Query Parameters**
+
+Key | Value | Description
+--- | ----- | -----------
+values | n/a | Child values are also listed?
+value  | n/a | Base64 encode binary data
+val    | n/a | Base64 encode binary data
+
 **Example Response**:
 
 ```json
