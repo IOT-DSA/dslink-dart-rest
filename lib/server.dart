@@ -126,7 +126,7 @@ class Server {
         _options(sr);
         break;
       case 'GET':
-        if (sr.subscribe) {
+        if (sr.isSubscribe) {
           _subscribe(sr);
           return;
         }
@@ -143,8 +143,8 @@ class Server {
         _post(sr);
         break;
       default:
-        var resp = new ServerResponse({'error': 'Bad Request'},
-            ResponseStatus.badRequest);
+        var resp = new ServerResponse(
+            {'error': 'Bad Request'}, ResponseStatus.badRequest);
         _sendJson(sr, resp);
         break;
     }
@@ -238,8 +238,9 @@ class Server {
         sr.response.headers.contentType = ContentType.BINARY;
       }
 
-      sr.response..add(body['data'])
-            ..close();
+      sr.response
+        ..add(body['data'])
+        ..close();
     }
   }
 
@@ -252,8 +253,10 @@ class Server {
 
     var body = await _readJsonData(sr);
     if (body is! Map) {
-      _sendJson(sr, new ServerResponse(
-          {'error': 'Invalid body'}, ResponseStatus.badRequest));
+      _sendJson(
+          sr,
+          new ServerResponse(
+              {'error': 'Invalid body'}, ResponseStatus.badRequest));
       return;
     }
 
@@ -409,7 +412,7 @@ class Server {
 
     try {
       return JSON.decode(content);
-    } catch(e) {
+    } catch (e) {
       logger.warning('Error JSON Decoding content: $content', e);
       try {
         return Uri.decodeComponent(content);
@@ -419,7 +422,6 @@ class Server {
       }
     }
   }
-
 }
 
 abstract class Templates {

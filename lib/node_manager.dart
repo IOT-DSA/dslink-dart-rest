@@ -18,18 +18,18 @@ class ServerRequest {
   HttpResponse get response => request.response;
   String get method => request.method;
   bool isHtml = false;
-  bool get binary => request.uri.queryParameters.containsKey('binary');
+  bool get isBinary => request.uri.queryParameters.containsKey('binary');
   bool get isInvoke => request.uri.queryParameters.containsKey('invoke');
-  bool get childValues => request.uri.queryParameters.containsKey('values');
-  bool get subscribe => request.uri.queryParameters.containsKey('watch') ||
+  bool get hasChildValues => request.uri.queryParameters.containsKey('values');
+  bool get isSubscribe =>
+      request.uri.queryParameters.containsKey('watch') ||
       request.uri.queryParameters.containsKey('subscribe');
   bool get detectType => request.uri.queryParameters.containsKey('detectType');
   bool get returnValue =>
       request.uri.queryParameters.containsKey('value') ||
       request.uri.queryParameters.containsKey('val');
-  int get timeout => int.parse(request.uri.queryParameters['timeout'],
-      onError: (_) => null);
-
+  int get timeout =>
+      int.parse(request.uri.queryParameters['timeout'], onError: (_) => null);
 
   ServerRequest(this.request) {
     path = Uri.decodeComponent(request.uri.normalizePath().path);
@@ -46,7 +46,6 @@ class ServerRequest {
       path = path.substring(0, path.length - 5);
     }
   }
-
 }
 
 class ServerResponse {
