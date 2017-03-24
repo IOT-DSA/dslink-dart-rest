@@ -12,14 +12,13 @@ If a password was provided, but not a username, the username is automatically `d
 ### Fetch Node
 
 **Method**: GET<br/>
-
-**Query Parameters**
+**Query Parameters**:
 
 Key | Value | Description
 --- | ----- | -----------
-values | n/a | Child values are also listed?
-value  | n/a | Base64 encode binary data
-val    | n/a | Base64 encode binary data
+values | n/a | Values of child nodes are also returned in client mode.
+value or val  | n/a | Base64 encode binary data. Returns only the value and not entire node definition.
+detectType | n/a | Attempt to automatically detect the type of value and assign appropriate MIME encoding
 
 **Example Response**:
 
@@ -70,6 +69,7 @@ val    | n/a | Base64 encode binary data
 - If the node already exists, the provided data is merged into the existing node.
 - When creating a new node, any parent node that does not exist is created.
 
+**Restrictions**: Data Host Only<br/>
 **Method**: PUT<br/>
 **Example Request**:
 ```json
@@ -94,7 +94,17 @@ val    | n/a | Base64 encode binary data
 
 ### Overwrite Node
 
+Update or overwrite an existing node. To update only the value, ensure that only the `?value` key and value are passed
+as a Map (or JSON object) in the POST body.
+
 **Method**: POST<br/>
+**Query Parameters**:
+
+Key | Value | Description
+--- | ----- | -----------
+value or val  | n/a | The entire body is treated as the value rather than a Map (JSON object) of the node.
+detectType | n/a | Attempt to automatically detect the type of value and assign appropriate MIME encoding
+
 **Example Request**:
 ```json
 {
@@ -115,6 +125,21 @@ val    | n/a | Base64 encode binary data
   "?value": 30
 }
 ```
+
+### Invoke Action
+
+Invoke an action on a remote node. The body must be a Map (JSON Object) consisting of the parameters required to invoke
+the action.
+
+**Method**: POST<br/>
+**Restrictions**: Client Mode Only<br/>
+**Query Parameters**:
+
+Key | Value | Description
+--- | ----- | -----------
+invoke | n/a | *REQUIRED*
+binary | n/a | Return response to invoke action as binary data.
+detectType | n/a | Try to automatically set Content Type based on MIME lookup from data headers.
 
 ### Delete Node
 
