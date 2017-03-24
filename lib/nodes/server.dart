@@ -716,7 +716,6 @@ class ServerNode extends SimpleNode implements NodeManager {
   Future<ServerResponse> _getData(ServerRequest sr) async {
     var hostPath = _hostPath(sr.path);
 
-    // TODO: This
     var n = provider.getNode(hostPath);
     if (n == null) {
       return new ServerResponse(

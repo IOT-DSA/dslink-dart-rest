@@ -28,8 +28,11 @@ class ServerRequest {
   bool get returnValue =>
       request.uri.queryParameters.containsKey('value') ||
       request.uri.queryParameters.containsKey('val');
-  int get timeout =>
-      int.parse(request.uri.queryParameters['timeout'], onError: (_) => null);
+  int get timeout {
+    if (request.uri.queryParameters['timeout'] == null) return null;
+    return int.parse(request.uri.queryParameters['timeout'],
+        onError: (_) => null);
+  }
 
   ServerRequest(this.request) {
     path = Uri.decodeComponent(request.uri.normalizePath().path);
