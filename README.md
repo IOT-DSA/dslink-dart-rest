@@ -140,6 +140,7 @@ Key | Value | Description
 invoke | n/a | *REQUIRED*
 binary | n/a | Return response to invoke action as binary data.
 detectType | n/a | Try to automatically set Content Type based on MIME lookup from data headers.
+timeout | integer number | Number of seconds to wait before invoke action attempt will time out.
 
 ### Delete Node
 
