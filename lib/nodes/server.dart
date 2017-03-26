@@ -463,7 +463,7 @@ class ServerNode extends SimpleNode implements NodeManager {
           .timeout(_timeout, onTimeout: () => null));
     }
 
-    var results = await Future.wait<ValueUpdate>(futs);
+    List<ValueUpdate> results = await Future.wait(futs);
     var values = <String, dynamic>{};
     for (var i = 0; i < vals.length; i++) {
       values[vals[i]] = {'value': results[i].value, 'timestamp': results[i].ts};
