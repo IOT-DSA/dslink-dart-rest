@@ -330,7 +330,7 @@ class Server {
 
   void _sendValue(ServerRequest req, ServerResponse resp) {
     _addNoCacheHeaders(req);
-    String etag = resp.body['value_timestamp'];
+    String etag = resp.body['?value_timestamp'];
 
     req.response.headers
       ..set('ETag', etag)

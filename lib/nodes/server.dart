@@ -417,7 +417,7 @@ class ServerNode extends SimpleNode implements NodeManager {
       return _updateValue(sr, body as Map);
     }
 
-    if (body is List && sr.path == '/_/vaues') {
+    if (body is List && sr.path == '/_/values') {
       return _getMultiValues(sr, body as List);
     }
 
