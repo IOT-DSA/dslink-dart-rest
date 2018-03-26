@@ -1,6 +1,6 @@
 {
   "name": "dslink-dart-rest",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "REST Server DSLink",
   "main": "bin/run.dart",
   "engines": {
