@@ -357,7 +357,6 @@ class Server {
       req.response
         ..write(value)
         ..close();
-      close();
       return;
     }
 
