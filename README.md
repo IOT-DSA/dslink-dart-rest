@@ -165,10 +165,17 @@ Whatever is posted to the URL will become the value of the node.
 
 **URL**: `http://host:port/path/to/node?value`<br/>
 **Method**: POST<br/>
-**Example Request**:
+**Example Request**:<br/>
+Convert your JSON to a string
+```json
+"{\"my_key\": \"my_value\"}"
+```
+or use the following format
 ```json
 {
-  "my_key": "my_value"
+  "?value": {
+    "my_key": "my_value"
+  }
 }
 ```
 
